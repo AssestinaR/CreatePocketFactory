@@ -1,6 +1,7 @@
 package com.modmake.createpocketfactory.block;
 
 import com.modmake.createpocketfactory.CreatePocketFactory;
+import com.simibubi.create.api.stress.BlockStressValues;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.SoundType;
@@ -11,6 +12,8 @@ import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 public final class ModBlocks {
+        private static final double LINKED_PUMP_STRESS_IMPACT = 4.0D;
+
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(CreatePocketFactory.MOD_ID);
 
     private static final BlockBehaviour.Properties FACTORY_BLOCK_PROPERTIES = BlockBehaviour.Properties.of()
@@ -46,10 +49,15 @@ public final class ModBlocks {
             .sound(SoundType.NETHERITE_BLOCK)
             .noOcclusion();
 
-        private static final BlockBehaviour.Properties LINKED_PUMP_PROPERTIES = BlockBehaviour.Properties.of()
-                        .strength(2.0F, 6.0F)
-                        .sound(SoundType.COPPER)
-                        .noOcclusion();
+    private static final BlockBehaviour.Properties LINKED_PUMP_PROPERTIES = BlockBehaviour.Properties.of()
+            .strength(2.0F, 6.0F)
+            .sound(SoundType.COPPER)
+            .noOcclusion();
+
+    private static final BlockBehaviour.Properties LINKED_CLUTCH_PROPERTIES = BlockBehaviour.Properties.of()
+            .strength(2.0F, 6.0F)
+            .sound(SoundType.NETHERITE_BLOCK)
+            .noOcclusion();
 
     public static final DeferredBlock<Block> POCKET_FACTORY_BLOCK_A = BLOCKS.register(
             "pocket_factory_block_a",
@@ -81,6 +89,11 @@ public final class ModBlocks {
             () -> new LinkedMechanicalPumpBlock(LINKED_PUMP_PROPERTIES)
     );
 
+    public static final DeferredBlock<LinkedClutchBlock> LINKED_CLUTCH = BLOCKS.register(
+            "linked_clutch",
+            () -> new LinkedClutchBlock(LINKED_CLUTCH_PROPERTIES)
+    );
+
     public static final DeferredBlock<LinkedItemVaultBlock> LINKED_ITEM_VAULT = BLOCKS.register(
             "linked_item_vault",
             () -> new LinkedItemVaultBlock(LINKED_VAULT_PROPERTIES)
@@ -97,4 +110,8 @@ public final class ModBlocks {
     public static void register(IEventBus modBus) {
         BLOCKS.register(modBus);
     }
+
+        public static void registerStressDefaults() {
+                BlockStressValues.IMPACTS.register(LINKED_MECHANICAL_PUMP.get(), () -> LINKED_PUMP_STRESS_IMPACT);
+        }
 }

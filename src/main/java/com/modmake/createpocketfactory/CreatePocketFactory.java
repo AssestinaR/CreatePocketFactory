@@ -10,6 +10,7 @@ import com.modmake.createpocketfactory.world.PocketFactoryDimensions;
 import com.mojang.logging.LogUtils;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -25,10 +26,15 @@ public final class CreatePocketFactory {
         ModBlockEntities.register(modBus);
         ModItems.register(modBus);
         ModAttachments.ATTACHMENT_TYPES.register(modBus);
+        modBus.addListener(this::onCommonSetup);
         modBus.addListener(ModNetworking::register);
         NeoForge.EVENT_BUS.addListener(this::onServerStarted);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         LOGGER.info("Create: Pocket Factory initialized");
+    }
+
+    private void onCommonSetup(FMLCommonSetupEvent event) {
+        event.enqueueWork(ModBlocks::registerStressDefaults);
     }
 
     private void onServerStarted(ServerStartedEvent event) {

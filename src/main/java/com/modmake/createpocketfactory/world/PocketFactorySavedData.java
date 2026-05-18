@@ -12,6 +12,7 @@ import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -37,6 +38,7 @@ public final class PocketFactorySavedData extends SavedData {
     private final Map<Integer, FluidStorageState> fluidChannels = new LinkedHashMap<>();
     private final Map<Integer, ChuteBridgeState> chuteChannels = new LinkedHashMap<>();
     private final Map<Integer, PumpBridgeState> pumpChannels = new LinkedHashMap<>();
+    private final Map<Integer, ClutchBridgeState> clutchChannels = new LinkedHashMap<>();
     private final Map<Integer, PortalChannelState> portalChannels = new LinkedHashMap<>();
     private int nextFactoryId = 1;
     private int nextBindingId = 1;
@@ -291,6 +293,9 @@ public final class PocketFactorySavedData extends SavedData {
         }
         if (channel == BindingChannel.LINKED_PUMP) {
             pumpChannels.remove(bindingId);
+        }
+        if (channel == BindingChannel.LINKED_CLUTCH) {
+            clutchChannels.remove(bindingId);
         }
         if (!clearBindingAssignments(bindingId, channel)) {
             return false;
@@ -577,6 +582,28 @@ public final class PocketFactorySavedData extends SavedData {
         return drained;
     }
 
+    public ClutchBridgeSnapshot getClutchSnapshot(int bindingId) {
+        ClutchBridgeState state = clutchChannels.computeIfAbsent(bindingId, id -> new ClutchBridgeState());
+        return state.snapshot();
+    }
+
+    public ClutchBridgeSnapshot updateClutchEndpointState(int bindingId, EndpointRole role, boolean powered,
+                                                          @Nullable ClutchDriveState driveState) {
+        ClutchBridgeState state = clutchChannels.computeIfAbsent(bindingId, id -> new ClutchBridgeState());
+        state.updateEndpoint(role, powered, driveState);
+        return state.snapshot();
+    }
+
+    public void clearClutchEndpointState(int bindingId, EndpointRole role) {
+        ClutchBridgeState state = clutchChannels.get(bindingId);
+        if (state == null) {
+            return;
+        }
+        if (state.clearEndpoint(role) && state.isEmpty()) {
+            clutchChannels.remove(bindingId);
+        }
+    }
+
     public void registerPortalEndpoint(int factoryId, PortalEndpoint endpoint, ResourceKey<Level> dimension, BlockPos pos) {
         PortalChannelState state = portalChannels.computeIfAbsent(factoryId, id -> new PortalChannelState());
         if (state.set(endpoint, dimension.location(), pos)) {
@@ -645,6 +672,17 @@ public final class PocketFactorySavedData extends SavedData {
     public record ChuteBridgeSnapshot(ItemStack pendingStack, @Nullable String targetEndpointKey, int version) {
     }
 
+    public record ClutchDriveState(float speed, Direction.AxisDirection axisDirection, float availableStress) {
+    }
+
+    public record ClutchEndpointSnapshot(boolean powered, @Nullable ClutchDriveState driveState) {
+    }
+
+    public record ClutchBridgeSnapshot(@Nullable ClutchEndpointSnapshot internalEndpoint,
+                                       @Nullable ClutchEndpointSnapshot externalEndpoint,
+                                       int version) {
+    }
+
     public record PortalEndpointRecord(ResourceLocation dimension, BlockPos pos) {
     }
 
@@ -667,7 +705,8 @@ public final class PocketFactorySavedData extends SavedData {
         ITEM_STORAGE("item_storage"),
         FLUID_STORAGE("fluid_storage"),
         LINKED_CHUTE("linked_chute"),
-        LINKED_PUMP("linked_pump");
+        LINKED_PUMP("linked_pump"),
+        LINKED_CLUTCH("linked_clutch");
 
         private final String id;
 
@@ -1386,6 +1425,41 @@ public final class PocketFactorySavedData extends SavedData {
             }
             tag.putInt("Version", version);
             return tag;
+        }
+    }
+
+    private static final class ClutchBridgeState {
+        private final EnumMap<EndpointRole, ClutchEndpointSnapshot> endpoints = new EnumMap<>(EndpointRole.class);
+        private int version;
+
+        private void updateEndpoint(EndpointRole role, boolean powered, @Nullable ClutchDriveState driveState) {
+            ClutchEndpointSnapshot previous = endpoints.get(role);
+            ClutchEndpointSnapshot next = new ClutchEndpointSnapshot(powered, driveState);
+            if (next.equals(previous)) {
+                return;
+            }
+            endpoints.put(role, next);
+            version++;
+        }
+
+        private boolean clearEndpoint(EndpointRole role) {
+            ClutchEndpointSnapshot removed = endpoints.remove(role);
+            if (removed == null) {
+                return false;
+            }
+            version++;
+            return true;
+        }
+
+        private boolean isEmpty() {
+            return endpoints.isEmpty();
+        }
+
+        private ClutchBridgeSnapshot snapshot() {
+            return new ClutchBridgeSnapshot(
+                endpoints.get(EndpointRole.INTERNAL),
+                endpoints.get(EndpointRole.EXTERNAL),
+                version);
         }
     }
 }

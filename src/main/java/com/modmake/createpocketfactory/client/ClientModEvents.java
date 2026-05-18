@@ -8,6 +8,8 @@ import com.simibubi.create.AllPartialModels;
 import com.simibubi.create.CreateClient;
 import com.simibubi.create.content.fluids.pump.PumpRenderer;
 import com.simibubi.create.content.kinetics.base.SingleAxisRotatingVisual;
+import com.simibubi.create.content.kinetics.transmission.SplitShaftRenderer;
+import com.simibubi.create.content.kinetics.transmission.SplitShaftVisual;
 import com.simibubi.create.content.fluids.tank.FluidTankModel;
 import com.simibubi.create.content.fluids.tank.FluidTankRenderer;
 import com.simibubi.create.content.logistics.chute.ChuteRenderer;
@@ -31,6 +33,7 @@ public final class ClientModEvents {
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModBlockEntities.POCKET_FACTORY_ENTRANCE.get(), PocketFactoryEntranceRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.LINKED_CHUTE.get(), ChuteRenderer::new);
+        event.registerBlockEntityRenderer(ModBlockEntities.LINKED_CLUTCH.get(), SplitShaftRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.LINKED_MECHANICAL_PUMP.get(), PumpRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.LINKED_FLUID_TANK.get(), FluidTankRenderer::new);
     }
@@ -38,6 +41,10 @@ public final class ClientModEvents {
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
+            SimpleBlockEntityVisualizer.builder(ModBlockEntities.LINKED_CLUTCH.get())
+                .factory(SplitShaftVisual::new)
+                .skipVanillaRender(blockEntity -> false)
+                .apply();
             SimpleBlockEntityVisualizer.builder(ModBlockEntities.LINKED_MECHANICAL_PUMP.get())
                 .factory(SingleAxisRotatingVisual.ofZ(AllPartialModels.MECHANICAL_PUMP_COG))
                 .skipVanillaRender(blockEntity -> false)
@@ -50,6 +57,7 @@ public final class ClientModEvents {
                     BuiltInRegistries.BLOCK.getKey(ModBlocks.LINKED_FLUID_TANK.get()),
                     FluidTankModel::standard
             );
+            ItemBlockRenderTypes.setRenderLayer(ModBlocks.LINKED_CLUTCH.get(), RenderType.cutoutMipped());
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.LINKED_CHUTE.get(), RenderType.cutoutMipped());
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.LINKED_FLUID_TANK.get(), RenderType.cutoutMipped());
         });

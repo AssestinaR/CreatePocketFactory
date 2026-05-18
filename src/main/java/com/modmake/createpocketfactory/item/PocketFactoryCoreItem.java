@@ -1,11 +1,13 @@
 package com.modmake.createpocketfactory.item;
 
 import com.modmake.createpocketfactory.block.LinkedChuteBlock;
+import com.modmake.createpocketfactory.block.entity.LinkedClutchBindingHelper;
 import com.modmake.createpocketfactory.block.entity.LinkedPumpBindingHelper;
 import com.modmake.createpocketfactory.block.ModBlocks;
 import com.modmake.createpocketfactory.block.PocketFactoryEntranceBlock;
 import com.modmake.createpocketfactory.block.PocketFactoryPortalBlock;
 import com.modmake.createpocketfactory.block.entity.LinkedChuteBlockEntity;
+import com.modmake.createpocketfactory.block.entity.LinkedClutchEndpoint;
 import com.modmake.createpocketfactory.block.entity.LinkedFluidTankBlockEntity;
 import com.modmake.createpocketfactory.block.entity.LinkedItemVaultBlockEntity;
 import com.modmake.createpocketfactory.block.entity.LinkedPumpEndpoint;
@@ -95,6 +97,13 @@ public final class PocketFactoryCoreItem extends Item {
             return handleChuteClick((ServerLevel) level, origin, stack, context.getPlayer());
         }
 
+        if (LinkedClutchBindingHelper.isBindableClutch(state) || LinkedClutchBindingHelper.isLinkedClutch(state)) {
+            if (level.isClientSide()) {
+                return InteractionResult.SUCCESS;
+            }
+            return handleClutchClick((ServerLevel) level, origin, stack, context.getPlayer());
+        }
+
         if (LinkedPumpBindingHelper.isBindablePump(state) || LinkedPumpBindingHelper.isLinkedPump(state)) {
             if (level.isClientSide()) {
                 return InteractionResult.SUCCESS;
@@ -112,6 +121,7 @@ public final class PocketFactoryCoreItem extends Item {
         tooltipComponents.add(Component.translatable("tooltip.create_pocket_factory.pocket_factory_internal_eye.link_vault"));
         tooltipComponents.add(Component.translatable("tooltip.create_pocket_factory.pocket_factory_internal_eye.link_tank"));
         tooltipComponents.add(Component.translatable("tooltip.create_pocket_factory.pocket_factory_internal_eye.link_chute"));
+        tooltipComponents.add(Component.translatable("tooltip.create_pocket_factory.pocket_factory_internal_eye.link_clutch"));
         tooltipComponents.add(Component.translatable("tooltip.create_pocket_factory.pocket_factory_internal_eye.link_pump"));
 
         SelectedEndpoint endpoint = getSelectedEndpoint(stack);
@@ -221,6 +231,10 @@ public final class PocketFactoryCoreItem extends Item {
             }
             case CHUTE -> {
                 notifyPlayer(player, "Linked chute linking now requires selecting the second linked chute directly.");
+                yield InteractionResult.FAIL;
+            }
+            case CLUTCH -> {
+                notifyPlayer(player, "Linked clutch linking now requires selecting the second clutch directly.");
                 yield InteractionResult.FAIL;
             }
             case PUMP -> {
@@ -342,6 +356,22 @@ public final class PocketFactoryCoreItem extends Item {
         );
     }
 
+    private static InteractionResult handleClutchClick(ServerLevel level, BlockPos origin, ItemStack stack, @Nullable Player player) {
+        BlockState state = level.getBlockState(origin);
+        return handleEndpointSelectionClick(
+                level,
+                origin,
+                stack,
+                player,
+                EndpointKind.CLUTCH,
+                "clutch",
+                "another normal clutch",
+                LinkedClutchBindingHelper.isLinkedClutch(state),
+                LinkedClutchBindingHelper.isBindableClutch(state),
+                PocketFactoryCoreItem::handleDirectClutchBinding
+        );
+    }
+
     private static InteractionResult handleEndpointSelectionClick(ServerLevel level, BlockPos origin, ItemStack stack,
                                                                   @Nullable Player player, EndpointKind kind,
                                                                   String endpointName, String completionTargetDescription,
@@ -432,6 +462,53 @@ public final class PocketFactoryCoreItem extends Item {
 
         clearPendingEndpoint(stack);
         notifyPlayer(player, "Pump link created.");
+        return InteractionResult.CONSUME;
+    }
+
+    private static InteractionResult handleDirectClutchBinding(ServerLevel level, BlockPos origin, ItemStack stack,
+                                                               @Nullable Player player, PendingEndpoint pendingEndpoint) {
+        ClutchPairValidation validation = validateDirectClutchPair(level, origin, pendingEndpoint);
+        if (!validation.valid()) {
+            notifyPlayer(player, validation.message());
+            return InteractionResult.FAIL;
+        }
+
+        PocketFactorySavedData.FactoryRecord factory = validation.factory();
+        if (factory == null) {
+            notifyPlayer(player, "No pocket factory found for the selected internal clutch.");
+            return InteractionResult.FAIL;
+        }
+
+        ServerLevel pendingLevel = level.getServer().getLevel(pendingEndpoint.dimension());
+        if (pendingLevel == null) {
+            clearPendingEndpoint(stack);
+            notifyPlayer(player, "Selected clutch is no longer available.");
+            return InteractionResult.FAIL;
+        }
+
+        boolean pendingInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(pendingEndpoint.dimension());
+        ServerLevel internalLevel = pendingInsidePocket ? pendingLevel : level;
+        BlockPos internalPos = pendingInsidePocket ? pendingEndpoint.pos() : origin;
+        ServerLevel externalLevel = pendingInsidePocket ? level : pendingLevel;
+        BlockPos externalPos = pendingInsidePocket ? origin : pendingEndpoint.pos();
+
+        PocketFactorySavedData savedData = PocketFactorySavedData.get(level.getServer());
+        int bindingId = savedData.createBinding(factory.id(), PocketFactorySavedData.BindingChannel.LINKED_CLUTCH);
+        if (!bindClutchEndpoint(internalLevel, internalPos, bindingId, factory.id(), true)) {
+            clearPendingEndpoint(stack);
+            notifyPlayer(player, "Binding failed while linking the internal clutch.");
+            return InteractionResult.FAIL;
+        }
+
+        if (!bindClutchEndpoint(externalLevel, externalPos, bindingId, factory.id(), false)) {
+            rollbackDirectClutchBinding(internalLevel, internalPos, bindingId);
+            clearPendingEndpoint(stack);
+            notifyPlayer(player, "Binding failed while linking the second clutch. The first clutch was rolled back.");
+            return InteractionResult.FAIL;
+        }
+
+        clearPendingEndpoint(stack);
+        notifyPlayer(player, "Clutch link created.");
         return InteractionResult.CONSUME;
     }
 
@@ -564,6 +641,14 @@ public final class PocketFactoryCoreItem extends Item {
             return new HoveredEndpoint(pos, EndpointKind.CHUTE, resolveChuteHoverState(level, pos, selectedEndpoint));
         }
 
+        if (LinkedClutchBindingHelper.isLinkedClutch(state)) {
+            return new HoveredEndpoint(pos, EndpointKind.CLUTCH, HoverState.BLOCKED);
+        }
+
+        if (LinkedClutchBindingHelper.isBindableClutch(state)) {
+            return new HoveredEndpoint(pos, EndpointKind.CLUTCH, resolveClutchHoverState(level, pos, selectedEndpoint));
+        }
+
         if (LinkedPumpBindingHelper.isLinkedPump(state)) {
             return new HoveredEndpoint(pos, EndpointKind.PUMP, HoverState.BLOCKED);
         }
@@ -627,6 +712,25 @@ public final class PocketFactoryCoreItem extends Item {
         }
 
         if (selectedEndpoint.kind() != EndpointKind.PUMP) {
+            return HoverState.BLOCKED;
+        }
+
+        if (selectedEndpoint.dimension().equals(level.dimension()) && selectedEndpoint.pos().equals(pos)) {
+            return HoverState.BLOCKED;
+        }
+
+        boolean selectedInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(selectedEndpoint.dimension());
+        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(level.dimension());
+        return selectedInsidePocket == currentInsidePocket ? HoverState.BLOCKED : HoverState.AVAILABLE;
+    }
+
+    private static HoverState resolveClutchHoverState(Level level, BlockPos pos,
+                                                      @Nullable SelectedEndpoint selectedEndpoint) {
+        if (selectedEndpoint == null) {
+            return HoverState.AVAILABLE;
+        }
+
+        if (selectedEndpoint.kind() != EndpointKind.CLUTCH) {
             return HoverState.BLOCKED;
         }
 
@@ -769,6 +873,38 @@ public final class PocketFactoryCoreItem extends Item {
         return PumpPairValidation.valid(factory);
     }
 
+    private static ClutchPairValidation validateDirectClutchPair(ServerLevel currentLevel, BlockPos currentPos,
+                                                                 PendingEndpoint pendingEndpoint) {
+        ServerLevel pendingLevel = currentLevel.getServer().getLevel(pendingEndpoint.dimension());
+        if (pendingLevel == null) {
+            return ClutchPairValidation.invalid("Selected clutch is no longer available.");
+        }
+
+        if (pendingEndpoint.kind() != EndpointKind.CLUTCH) {
+            return ClutchPairValidation.invalid("Select another normal clutch.");
+        }
+
+        if (!LinkedClutchBindingHelper.isBindableClutch(currentLevel.getBlockState(currentPos))
+            || !LinkedClutchBindingHelper.isBindableClutch(pendingLevel.getBlockState(pendingEndpoint.pos()))) {
+            return ClutchPairValidation.invalid("Both targets must still be normal clutches.");
+        }
+
+        boolean pendingInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(pendingEndpoint.dimension());
+        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(currentLevel.dimension());
+        if (pendingInsidePocket == currentInsidePocket) {
+            return ClutchPairValidation.invalid("Select one clutch inside a pocket factory and one clutch outside it.");
+        }
+
+        BlockPos internalPos = pendingInsidePocket ? pendingEndpoint.pos() : currentPos;
+        PocketFactorySavedData savedData = PocketFactorySavedData.get(currentLevel.getServer());
+        PocketFactorySavedData.FactoryRecord factory = PocketFactoryDimensions.findFactoryAt(savedData, internalPos);
+        if (factory == null) {
+            return ClutchPairValidation.invalid("No pocket factory found for the selected internal clutch.");
+        }
+
+        return ClutchPairValidation.valid(factory);
+    }
+
     private static boolean bindChuteEndpoint(ServerLevel level, BlockPos pos, int bindingId, int factoryId, boolean internalEndpoint) {
         BlockState state = level.getBlockState(pos);
         if (!isBindableChute(state)) {
@@ -854,6 +990,45 @@ public final class PocketFactoryCoreItem extends Item {
         }
     }
 
+    private static boolean bindClutchEndpoint(ServerLevel level, BlockPos pos, int bindingId, int factoryId, boolean internalEndpoint) {
+        BlockState state = level.getBlockState(pos);
+        if (!LinkedClutchBindingHelper.isBindableClutch(state)) {
+            return false;
+        }
+
+        level.setBlock(pos, LinkedClutchBindingHelper.toLinkedState(state), net.minecraft.world.level.block.Block.UPDATE_ALL_IMMEDIATE);
+        if (!(level.getBlockEntity(pos) instanceof LinkedClutchEndpoint linkedClutch)) {
+            level.setBlock(pos, state, net.minecraft.world.level.block.Block.UPDATE_ALL_IMMEDIATE);
+            return false;
+        }
+
+        PocketFactorySavedData savedData = PocketFactorySavedData.get(level.getServer());
+        String endpointKey = BindingEndpointHelper.endpointKey(level, pos);
+        int resolvedBindingId = savedData.bindEndpointToBinding(
+                bindingId,
+                factoryId,
+                PocketFactorySavedData.BindingChannel.LINKED_CLUTCH,
+                internalEndpoint ? PocketFactorySavedData.EndpointRole.INTERNAL : PocketFactorySavedData.EndpointRole.EXTERNAL,
+                endpointKey
+        );
+        if (resolvedBindingId <= 0) {
+            level.setBlock(pos, state, net.minecraft.world.level.block.Block.UPDATE_ALL_IMMEDIATE);
+            return false;
+        }
+
+        linkedClutch.setBinding(resolvedBindingId, factoryId, internalEndpoint);
+        return true;
+    }
+
+    private static void rollbackDirectClutchBinding(ServerLevel level, BlockPos pos, int bindingId) {
+        PocketFactorySavedData savedData = PocketFactorySavedData.get(level.getServer());
+        savedData.disposeBinding(bindingId, PocketFactorySavedData.BindingChannel.LINKED_CLUTCH);
+        BlockState state = level.getBlockState(pos);
+        if (LinkedClutchBindingHelper.isLinkedClutch(state)) {
+            level.setBlock(pos, LinkedClutchBindingHelper.toVanillaState(state), net.minecraft.world.level.block.Block.UPDATE_ALL_IMMEDIATE);
+        }
+    }
+
     private static @Nullable LinkedItemVaultBlockEntity resolveLinkedItemController(LinkedItemVaultBlockEntity blockEntity) {
         if (blockEntity.isController()) {
             return blockEntity;
@@ -893,6 +1068,7 @@ public final class PocketFactoryCoreItem extends Item {
         ITEM_VAULT,
         FLUID_TANK,
         CHUTE,
+        CLUTCH,
         PUMP,
         PORTAL;
 
@@ -907,7 +1083,7 @@ public final class PocketFactoryCoreItem extends Item {
             return switch (this) {
                 case ITEM_VAULT -> LinkedStorageManualBindingHelper.StorageKind.ITEM_VAULT;
                 case FLUID_TANK -> LinkedStorageManualBindingHelper.StorageKind.FLUID_TANK;
-                case CHUTE, PUMP, PORTAL -> null;
+                case CHUTE, CLUTCH, PUMP, PORTAL -> null;
             };
         }
 
@@ -916,6 +1092,7 @@ public final class PocketFactoryCoreItem extends Item {
                 case ITEM_VAULT -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_item_vault";
                 case FLUID_TANK -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_fluid_tank";
                 case CHUTE -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_linked_chute";
+                case CLUTCH -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_linked_clutch";
                 case PUMP -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_linked_pump";
                 case PORTAL -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_portal";
             };
@@ -963,6 +1140,16 @@ public final class PocketFactoryCoreItem extends Item {
         }
     }
 
+    private record ClutchPairValidation(boolean valid, @Nullable PocketFactorySavedData.FactoryRecord factory, @Nullable String message) {
+        private static ClutchPairValidation valid(PocketFactorySavedData.FactoryRecord factory) {
+            return new ClutchPairValidation(true, factory, null);
+        }
+
+        private static ClutchPairValidation invalid(String message) {
+            return new ClutchPairValidation(false, null, message);
+        }
+    }
+
     private record PendingEndpoint(ResourceKey<Level> dimension, BlockPos pos, EndpointKind kind) {
         private LinkedStorageManualBindingHelper.StorageKind storageKind() {
             LinkedStorageManualBindingHelper.StorageKind storageKind = kind.storageKind();
@@ -988,6 +1175,10 @@ public final class PocketFactoryCoreItem extends Item {
 
         public boolean isPump() {
             return kind == EndpointKind.PUMP;
+        }
+
+        public boolean isClutch() {
+            return kind == EndpointKind.CLUTCH;
         }
 
         public String tooltipKey() {

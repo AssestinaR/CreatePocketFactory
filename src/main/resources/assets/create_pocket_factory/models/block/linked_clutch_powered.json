@@ -1,0 +1,7 @@
+{
+  "parent": "create_pocket_factory:block/linked_clutch",
+  "textures": {
+    "0": "create:block/clutch_on",
+    "particle": "create:block/clutch_on"
+  }
+}

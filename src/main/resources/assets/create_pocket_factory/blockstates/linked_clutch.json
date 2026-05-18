@@ -1,0 +1,30 @@
+{
+  "variants": {
+    "axis=x,powered=false": {
+      "model": "create_pocket_factory:block/linked_clutch",
+      "x": 90,
+      "y": 90
+    },
+    "axis=x,powered=true": {
+      "model": "create_pocket_factory:block/linked_clutch_powered",
+      "x": 90,
+      "y": 90
+    },
+    "axis=y,powered=false": {
+      "model": "create_pocket_factory:block/linked_clutch"
+    },
+    "axis=y,powered=true": {
+      "model": "create_pocket_factory:block/linked_clutch_powered"
+    },
+    "axis=z,powered=false": {
+      "model": "create_pocket_factory:block/linked_clutch",
+      "x": 90,
+      "y": 180
+    },
+    "axis=z,powered=true": {
+      "model": "create_pocket_factory:block/linked_clutch_powered",
+      "x": 90,
+      "y": 180
+    }
+  }
+}

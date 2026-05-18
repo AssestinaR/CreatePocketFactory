@@ -27,20 +27,25 @@ public final class ModBlockEntities {
             () -> BlockEntityType.Builder.of(LinkedChuteBlockEntity::new, ModBlocks.LINKED_CHUTE.get()).build(null)
     );
 
-        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedItemVaultBlockEntity>> LINKED_ITEM_VAULT = BLOCK_ENTITY_TYPES.register(
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedClutchBlockEntity>> LINKED_CLUTCH = BLOCK_ENTITY_TYPES.register(
+            "linked_clutch",
+            () -> BlockEntityType.Builder.of((pos, state) -> new LinkedClutchBlockEntity(ModBlockEntities.LINKED_CLUTCH.get(), pos, state), ModBlocks.LINKED_CLUTCH.get()).build(null)
+    );
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedItemVaultBlockEntity>> LINKED_ITEM_VAULT = BLOCK_ENTITY_TYPES.register(
             "linked_item_vault",
             () -> BlockEntityType.Builder.of(LinkedItemVaultBlockEntity::new, ModBlocks.LINKED_ITEM_VAULT.get()).build(null)
-        );
+    );
 
-        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedFluidTankBlockEntity>> LINKED_FLUID_TANK = BLOCK_ENTITY_TYPES.register(
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedFluidTankBlockEntity>> LINKED_FLUID_TANK = BLOCK_ENTITY_TYPES.register(
             "linked_fluid_tank",
             () -> BlockEntityType.Builder.of(LinkedFluidTankBlockEntity::new, ModBlocks.LINKED_FLUID_TANK.get()).build(null)
-        );
+    );
 
-            public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedPumpBlockEntity>> LINKED_MECHANICAL_PUMP = BLOCK_ENTITY_TYPES.register(
-                "linked_mechanical_pump",
-                () -> BlockEntityType.Builder.of((pos, state) -> new LinkedPumpBlockEntity(ModBlockEntities.LINKED_MECHANICAL_PUMP.get(), pos, state), ModBlocks.LINKED_MECHANICAL_PUMP.get()).build(null)
-            );
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedPumpBlockEntity>> LINKED_MECHANICAL_PUMP = BLOCK_ENTITY_TYPES.register(
+            "linked_mechanical_pump",
+            () -> BlockEntityType.Builder.of((pos, state) -> new LinkedPumpBlockEntity(ModBlockEntities.LINKED_MECHANICAL_PUMP.get(), pos, state), ModBlocks.LINKED_MECHANICAL_PUMP.get()).build(null)
+    );
 
     private ModBlockEntities() {
     }

@@ -40,6 +40,7 @@ public final class ModItems {
             "linked_chute",
             () -> new LinkedChuteBlockItem(ModBlocks.LINKED_CHUTE.get(), new Item.Properties())
         );
+    public static final DeferredItem<BlockItem> LINKED_CLUTCH = registerBlockItem(ModBlocks.LINKED_CLUTCH);
     public static final DeferredItem<BlockItem> LINKED_MECHANICAL_PUMP = registerBlockItem(ModBlocks.LINKED_MECHANICAL_PUMP);
     public static final DeferredItem<BlockItem> POCKET_FACTORY_BLOCK_A = registerBlockItem(ModBlocks.POCKET_FACTORY_BLOCK_A);
     public static final DeferredItem<BlockItem> POCKET_FACTORY_BLOCK_B = registerBlockItem(ModBlocks.POCKET_FACTORY_BLOCK_B);
