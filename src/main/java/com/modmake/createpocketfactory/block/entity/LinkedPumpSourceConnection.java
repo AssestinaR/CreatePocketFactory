@@ -1,6 +1,5 @@
 package com.modmake.createpocketfactory.block.entity;
 
-import com.modmake.createpocketfactory.CreatePocketFactory;
 import com.simibubi.create.foundation.ICapabilityProvider;
 import com.simibubi.create.content.fluids.FlowSource;
 import com.simibubi.create.content.fluids.PipeConnection;
@@ -74,7 +73,6 @@ public class LinkedPumpSourceConnection extends PipeConnection {
         private final LinkedPumpBlockEntity owner;
         private @javax.annotation.Nullable FlowSource cachedBackingSource;
         private @javax.annotation.Nullable String cachedBackingKey;
-        private int debugLogCooldown;
 
         private LinkedRemotePipeSource(LinkedPumpBlockEntity owner, Direction localSide) {
             super(new BlockFace(owner.getBlockPos(), localSide));
@@ -89,12 +87,10 @@ public class LinkedPumpSourceConnection extends PipeConnection {
                     if (remotePumpEntity == null || remotePumpEntity.isRemoved()) {
                         cachedBackingSource = null;
                         cachedBackingKey = null;
-                        emitDebugLog("backing_source_remote_missing", spec, null, FluidStack.EMPTY, false);
                         return Optional.empty();
                     }
                     cachedBackingSource.manageSource(spec.level(), remotePumpEntity);
                 }
-                emitDebugLog("backing_source_cached", spec, cachedBackingSource, FluidStack.EMPTY, true);
                 return Optional.of(cachedBackingSource);
             }
 
@@ -102,7 +98,6 @@ public class LinkedPumpSourceConnection extends PipeConnection {
             if (remotePumpEntity == null || remotePumpEntity.isRemoved()) {
                 cachedBackingSource = null;
                 cachedBackingKey = null;
-                emitDebugLog("backing_source_remote_missing", spec, null, FluidStack.EMPTY, false);
                 return Optional.empty();
             }
 
@@ -110,7 +105,6 @@ public class LinkedPumpSourceConnection extends PipeConnection {
             if (!remotePullConnection.determineSource(spec.level(), spec.pos())) {
                 cachedBackingSource = null;
                 cachedBackingKey = null;
-                emitDebugLog("backing_source_determine_failed", spec, null, FluidStack.EMPTY, false);
                 return Optional.empty();
             }
 
@@ -118,34 +112,7 @@ public class LinkedPumpSourceConnection extends PipeConnection {
             Optional<FlowSource> remoteSource = getSource(remotePullConnection);
             cachedBackingSource = remoteSource.orElse(null);
             cachedBackingKey = remoteSource.isPresent() ? backingKey : null;
-            emitDebugLog("backing_source_resolved", spec, cachedBackingSource, FluidStack.EMPTY, remoteSource.isPresent());
             return remoteSource;
-        }
-
-        private void emitDebugLog(String stage, LinkedPumpBlockEntity.RemoteSourceSpec spec,
-                                  @javax.annotation.Nullable FlowSource source, FluidStack provided, boolean resolved) {
-            Level level = owner.getLevel();
-            if (level == null || level.isClientSide || --debugLogCooldown > 0) {
-                return;
-            }
-            debugLogCooldown = 40;
-
-            String sourceType = source == null ? "null" : source.getClass().getSimpleName();
-            boolean endpoint = source != null && source.isEndpoint();
-            boolean hasHandler = source != null && source.provideHandler() != null && source.provideHandler().getCapability() != null;
-
-            CreatePocketFactory.LOGGER.info(
-                "LinkedPump source stage={} owner={} remotePos={} remotePull={} resolved={} sourceType={} endpoint={} hasHandler={} provided={}",
-                stage,
-                owner.getBlockPos(),
-                spec.pos(),
-                spec.pullSide(),
-                resolved,
-                sourceType,
-                endpoint,
-                hasHandler,
-                provided
-            );
         }
 
         @Override
@@ -175,12 +142,10 @@ public class LinkedPumpSourceConnection extends PipeConnection {
             try {
                 Optional<FlowSource> remoteSource = resolveRemoteBackingSource(spec, true);
                 if (remoteSource.isEmpty()) {
-                    emitDebugLog("provide_no_source", spec, null, FluidStack.EMPTY, false);
                     return FluidStack.EMPTY;
                 }
 
                 FluidStack provided = remoteSource.get().provideFluid(extractionPredicate);
-                emitDebugLog("provide_result", spec, remoteSource.get(), provided, true);
                 return extractionPredicate.test(provided) ? provided : FluidStack.EMPTY;
             } finally {
                 activeLookups.remove(lookupKey);

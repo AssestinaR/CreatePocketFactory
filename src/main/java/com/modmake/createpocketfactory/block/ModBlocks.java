@@ -46,21 +46,6 @@ public final class ModBlocks {
             .sound(SoundType.NETHERITE_BLOCK)
             .noOcclusion();
 
-    private static final BlockBehaviour.Properties LINKED_PIPE_PROPERTIES = BlockBehaviour.Properties.of()
-            .strength(1.5F, 6.0F)
-            .sound(SoundType.COPPER)
-            .noOcclusion();
-
-    private static final BlockBehaviour.Properties LINKED_GLASS_PIPE_PROPERTIES = BlockBehaviour.Properties.of()
-            .strength(1.5F, 6.0F)
-            .sound(SoundType.GLASS)
-            .noOcclusion();
-
-    private static final BlockBehaviour.Properties LINKED_ENCASED_PIPE_PROPERTIES = BlockBehaviour.Properties.of()
-            .strength(1.5F, 6.0F)
-            .sound(SoundType.COPPER)
-            .noOcclusion();
-
         private static final BlockBehaviour.Properties LINKED_PUMP_PROPERTIES = BlockBehaviour.Properties.of()
                         .strength(2.0F, 6.0F)
                         .sound(SoundType.COPPER)
@@ -89,21 +74,6 @@ public final class ModBlocks {
     public static final DeferredBlock<LinkedChuteBlock> LINKED_CHUTE = BLOCKS.register(
             "linked_chute",
             () -> new LinkedChuteBlock(LINKED_CHUTE_PROPERTIES)
-    );
-
-    public static final DeferredBlock<LinkedFluidPipeBlock> LINKED_FLUID_PIPE = BLOCKS.register(
-            "linked_fluid_pipe",
-            () -> new LinkedFluidPipeBlock(LINKED_PIPE_PROPERTIES)
-    );
-
-    public static final DeferredBlock<LinkedGlassFluidPipeBlock> LINKED_GLASS_FLUID_PIPE = BLOCKS.register(
-            "linked_glass_fluid_pipe",
-            () -> new LinkedGlassFluidPipeBlock(LINKED_GLASS_PIPE_PROPERTIES)
-    );
-
-    public static final DeferredBlock<LinkedEncasedPipeBlock> LINKED_ENCASED_FLUID_PIPE = BLOCKS.register(
-            "linked_encased_fluid_pipe",
-            () -> new LinkedEncasedPipeBlock(LINKED_ENCASED_PIPE_PROPERTIES, () -> com.simibubi.create.AllBlocks.COPPER_CASING.get())
     );
 
     public static final DeferredBlock<LinkedMechanicalPumpBlock> LINKED_MECHANICAL_PUMP = BLOCKS.register(

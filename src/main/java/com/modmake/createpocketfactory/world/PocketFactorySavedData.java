@@ -36,7 +36,7 @@ public final class PocketFactorySavedData extends SavedData {
     private final Map<Integer, ItemStorageState> itemChannels = new LinkedHashMap<>();
     private final Map<Integer, FluidStorageState> fluidChannels = new LinkedHashMap<>();
     private final Map<Integer, ChuteBridgeState> chuteChannels = new LinkedHashMap<>();
-    private final Map<Integer, PipeBridgeState> pipeChannels = new LinkedHashMap<>();
+    private final Map<Integer, PumpBridgeState> pumpChannels = new LinkedHashMap<>();
     private final Map<Integer, PortalChannelState> portalChannels = new LinkedHashMap<>();
     private int nextFactoryId = 1;
     private int nextBindingId = 1;
@@ -96,12 +96,12 @@ public final class PocketFactorySavedData extends SavedData {
             }
         }
 
-        ListTag pipeChannelsTag = tag.getList("PipeChannels", Tag.TAG_COMPOUND);
-        for (Tag entry : pipeChannelsTag) {
+        ListTag pumpChannelsTag = tag.getList("PumpChannels", Tag.TAG_COMPOUND);
+        for (Tag entry : pumpChannelsTag) {
             CompoundTag channelTag = (CompoundTag) entry;
             int bindingId = channelTag.getInt("BindingId");
             if (bindingId > 0) {
-                data.pipeChannels.put(bindingId, PipeBridgeState.load(channelTag, registries));
+                data.pumpChannels.put(bindingId, PumpBridgeState.load(channelTag, registries));
             }
         }
 
@@ -158,11 +158,11 @@ public final class PocketFactorySavedData extends SavedData {
         }
         tag.put("ChuteChannels", chuteChannelsTag);
 
-        ListTag pipeChannelsTag = new ListTag();
-        for (Map.Entry<Integer, PipeBridgeState> entry : pipeChannels.entrySet()) {
-            pipeChannelsTag.add(entry.getValue().save(entry.getKey(), registries));
+        ListTag pumpChannelsTag = new ListTag();
+        for (Map.Entry<Integer, PumpBridgeState> entry : pumpChannels.entrySet()) {
+            pumpChannelsTag.add(entry.getValue().save(entry.getKey(), registries));
         }
-        tag.put("PipeChannels", pipeChannelsTag);
+        tag.put("PumpChannels", pumpChannelsTag);
         return tag;
     }
 
@@ -303,8 +303,8 @@ public final class PocketFactorySavedData extends SavedData {
         if (channel == BindingChannel.LINKED_CHUTE) {
             chuteChannels.remove(bindingId);
         }
-        if (channel == BindingChannel.LINKED_PIPE) {
-            pipeChannels.remove(bindingId);
+        if (channel == BindingChannel.LINKED_PUMP) {
+            pumpChannels.remove(bindingId);
         }
         if (!clearBindingAssignments(bindingId, channel)) {
             return false;
@@ -524,38 +524,38 @@ public final class PocketFactorySavedData extends SavedData {
         return polled;
     }
 
-    public FluidStack peekPipeBridgeFluid(int bindingId) {
-        PipeBridgeState state = pipeChannels.get(bindingId);
+    public FluidStack peekPumpBridgeFluid(int bindingId) {
+        PumpBridgeState state = pumpChannels.get(bindingId);
         return state == null ? FluidStack.EMPTY : state.fluid.copy();
     }
 
-    public @Nullable String getPipeBridgeSourceEndpointKey(int bindingId) {
-        PipeBridgeState state = pipeChannels.get(bindingId);
+    public @Nullable String getPumpBridgeSourceEndpointKey(int bindingId) {
+        PumpBridgeState state = pumpChannels.get(bindingId);
         return state == null ? null : state.sourceEndpointKey;
     }
 
-    public int getPipeBridgeRemainingCapacity(int bindingId, int capacityMb) {
-        PipeBridgeState state = pipeChannels.computeIfAbsent(bindingId, id -> new PipeBridgeState());
+    public int getPumpBridgeRemainingCapacity(int bindingId, int capacityMb) {
+        PumpBridgeState state = pumpChannels.computeIfAbsent(bindingId, id -> new PumpBridgeState());
         return Math.max(0, capacityMb - state.fluid.getAmount());
     }
 
-    public int getPipeBridgeAcceptedAmount(int bindingId, FluidStack stack, int capacityMb) {
+    public int getPumpBridgeAcceptedAmount(int bindingId, FluidStack stack, int capacityMb) {
         if (stack.isEmpty()) {
             return 0;
         }
-        PipeBridgeState state = pipeChannels.computeIfAbsent(bindingId, id -> new PipeBridgeState());
+        PumpBridgeState state = pumpChannels.computeIfAbsent(bindingId, id -> new PumpBridgeState());
         if (!state.fluid.isEmpty() && !FluidStack.isSameFluidSameComponents(state.fluid, stack)) {
             return 0;
         }
         return Math.min(stack.getAmount(), Math.max(0, capacityMb - state.fluid.getAmount()));
     }
 
-    public int fillPipeBridge(int bindingId, @Nullable String sourceEndpointKey, FluidStack stack, int capacityMb) {
+    public int fillPumpBridge(int bindingId, @Nullable String sourceEndpointKey, FluidStack stack, int capacityMb) {
         if (stack.isEmpty()) {
             return 0;
         }
-        PipeBridgeState state = pipeChannels.computeIfAbsent(bindingId, id -> new PipeBridgeState());
-        int accepted = getPipeBridgeAcceptedAmount(bindingId, stack, capacityMb);
+        PumpBridgeState state = pumpChannels.computeIfAbsent(bindingId, id -> new PumpBridgeState());
+        int accepted = getPumpBridgeAcceptedAmount(bindingId, stack, capacityMb);
         if (accepted <= 0) {
             return 0;
         }
@@ -571,8 +571,8 @@ public final class PocketFactorySavedData extends SavedData {
         return accepted;
     }
 
-    public FluidStack drainPipeBridgeFluid(int bindingId, @Nullable String requesterEndpointKey, int amount) {
-        PipeBridgeState state = pipeChannels.get(bindingId);
+    public FluidStack drainPumpBridgeFluid(int bindingId, @Nullable String requesterEndpointKey, int amount) {
+        PumpBridgeState state = pumpChannels.get(bindingId);
         if (state == null || state.fluid.isEmpty() || amount <= 0) {
             return FluidStack.EMPTY;
         }
@@ -681,7 +681,6 @@ public final class PocketFactorySavedData extends SavedData {
         ITEM_STORAGE("item_storage"),
         FLUID_STORAGE("fluid_storage"),
         LINKED_CHUTE("linked_chute"),
-        LINKED_PIPE("linked_pipe"),
         LINKED_PUMP("linked_pump");
 
         private final String id;
@@ -1379,13 +1378,13 @@ public final class PocketFactorySavedData extends SavedData {
         }
     }
 
-    private static final class PipeBridgeState {
+    private static final class PumpBridgeState {
         private FluidStack fluid = FluidStack.EMPTY;
         private @Nullable String sourceEndpointKey;
         private int version;
 
-        private static PipeBridgeState load(CompoundTag tag, HolderLookup.Provider registries) {
-            PipeBridgeState state = new PipeBridgeState();
+        private static PumpBridgeState load(CompoundTag tag, HolderLookup.Provider registries) {
+            PumpBridgeState state = new PumpBridgeState();
             state.fluid = FluidStack.parseOptional(registries, tag.getCompound("Fluid"));
             state.sourceEndpointKey = tag.contains("SourceEndpointKey", Tag.TAG_STRING) ? tag.getString("SourceEndpointKey") : null;
             state.version = tag.getInt("Version");

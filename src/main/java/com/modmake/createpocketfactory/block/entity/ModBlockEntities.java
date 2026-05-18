@@ -27,21 +27,6 @@ public final class ModBlockEntities {
             () -> BlockEntityType.Builder.of(LinkedChuteBlockEntity::new, ModBlocks.LINKED_CHUTE.get()).build(null)
     );
 
-        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedFluidPipeBlockEntity>> LINKED_FLUID_PIPE = BLOCK_ENTITY_TYPES.register(
-            "linked_fluid_pipe",
-            () -> BlockEntityType.Builder.of((pos, state) -> new LinkedFluidPipeBlockEntity(ModBlockEntities.LINKED_FLUID_PIPE.get(), pos, state), ModBlocks.LINKED_FLUID_PIPE.get()).build(null)
-        );
-
-        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedStraightPipeBlockEntity>> LINKED_GLASS_FLUID_PIPE = BLOCK_ENTITY_TYPES.register(
-            "linked_glass_fluid_pipe",
-            () -> BlockEntityType.Builder.of((pos, state) -> new LinkedStraightPipeBlockEntity(ModBlockEntities.LINKED_GLASS_FLUID_PIPE.get(), pos, state), ModBlocks.LINKED_GLASS_FLUID_PIPE.get()).build(null)
-        );
-
-        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedFluidPipeBlockEntity>> LINKED_ENCASED_FLUID_PIPE = BLOCK_ENTITY_TYPES.register(
-            "linked_encased_fluid_pipe",
-            () -> BlockEntityType.Builder.of((pos, state) -> new LinkedFluidPipeBlockEntity(ModBlockEntities.LINKED_ENCASED_FLUID_PIPE.get(), pos, state), ModBlocks.LINKED_ENCASED_FLUID_PIPE.get()).build(null)
-        );
-
         public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LinkedItemVaultBlockEntity>> LINKED_ITEM_VAULT = BLOCK_ENTITY_TYPES.register(
             "linked_item_vault",
             () -> BlockEntityType.Builder.of(LinkedItemVaultBlockEntity::new, ModBlocks.LINKED_ITEM_VAULT.get()).build(null)
@@ -64,8 +49,6 @@ public final class ModBlockEntities {
         BLOCK_ENTITY_TYPES.register(modBus);
         modBus.addListener(LinkedItemVaultBlockEntity::registerCapabilities);
         modBus.addListener(LinkedFluidTankBlockEntity::registerCapabilities);
-        modBus.addListener(LinkedFluidPipeBlockEntity::registerCapabilities);
-        modBus.addListener(LinkedStraightPipeBlockEntity::registerCapabilities);
         modBus.addListener(LinkedPumpBlockEntity::registerCapabilities);
     }
 }

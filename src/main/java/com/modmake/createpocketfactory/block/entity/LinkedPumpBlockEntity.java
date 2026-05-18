@@ -1,6 +1,5 @@
 package com.modmake.createpocketfactory.block.entity;
 
-import com.modmake.createpocketfactory.CreatePocketFactory;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -55,8 +54,6 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
     private int bindingId = -1;
     private int factoryId = -1;
     private boolean internalEndpoint;
-    private int debugLogCooldown;
-
     public LinkedPumpBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
     }
@@ -136,49 +133,18 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
         sendData();
     }
 
-    private FluidStack getRemoteProvidedFluid() {
-        RemotePumpContext remoteContext = resolveRemotePumpContext().context();
-        if (remoteContext == null) {
-            return FluidStack.EMPTY;
-        }
-
-        if (remoteContext.level().getBlockEntity(remoteContext.pos()) instanceof LinkedPumpBlockEntity remotePump) {
-            FluidTransportBehaviour remoteTransport = remotePump.getBehaviour(FluidTransportBehaviour.TYPE);
-            if (remoteTransport != null) {
-                PipeConnection remotePullConnection = remoteTransport.getConnection(remoteContext.pullSide());
-                if (remotePullConnection != null) {
-                    FluidStack provided = remotePullConnection.getProvidedFluid();
-                    if (!provided.isEmpty()) {
-                        return provided.copy();
-                    }
-                }
-            }
-        }
-
-        IFluidHandler remoteSource = remoteContext.level().getCapability(
-                Capabilities.FluidHandler.BLOCK,
-                remoteContext.pos().relative(remoteContext.pullSide()),
-                remoteContext.pullSide().getOpposite()
-        );
-        if (remoteSource == null) {
-            return FluidStack.EMPTY;
-        }
-        return remoteSource.drain(1, IFluidHandler.FluidAction.SIMULATE);
-    }
-
     private void bridgeLinkedTransfer(ServerLevel serverLevel) {
         RemotePumpContext remoteContext = resolveRemotePumpContext().context();
         Direction localPullSide = getPullSide();
         Direction localPushSide = getPushSide();
         if (remoteContext == null || localPullSide == null || localPushSide == null || serverLevel.getServer() == null) {
-            emitDebugLog("bridge_missing_context", remoteContext, false, false);
             return;
         }
 
         PocketFactorySavedData savedData = PocketFactorySavedData.get(serverLevel.getServer());
         String localEndpointKey = BindingEndpointHelper.endpointKey(serverLevel, worldPosition);
-        FluidStack buffered = savedData.peekPipeBridgeFluid(bindingId);
-        String sourceEndpointKey = savedData.getPipeBridgeSourceEndpointKey(bindingId);
+        FluidStack buffered = savedData.peekPumpBridgeFluid(bindingId);
+        String sourceEndpointKey = savedData.getPumpBridgeSourceEndpointKey(bindingId);
 
         List<ResolvedFluidEndpoint> localSources = collectTransferEndpoints(serverLevel, worldPosition, localPullSide);
         List<ResolvedFluidEndpoint> localTargets = collectTransferEndpoints(serverLevel, worldPosition, localPushSide);
@@ -189,13 +155,12 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
             toInsert.setAmount(Math.min(toInsert.getAmount(), getMaxTransferPerTick()));
             int filled = executeFill(localTargets, toInsert);
             if (filled > 0) {
-                savedData.drainPipeBridgeFluid(bindingId, localEndpointKey, filled);
+                savedData.drainPumpBridgeFluid(bindingId, localEndpointKey, filled);
                 transferred = true;
-                emitDebugLog("bridge_transfer", remoteContext, !localSources.isEmpty(), true);
             }
         }
 
-        int remainingCapacity = savedData.getPipeBridgeRemainingCapacity(bindingId, BRIDGE_BUFFER_CAPACITY);
+        int remainingCapacity = savedData.getPumpBridgeRemainingCapacity(bindingId, BRIDGE_BUFFER_CAPACITY);
         boolean canSourceIntoBridge = remainingCapacity > 0
                 && (sourceEndpointKey == null || sourceEndpointKey.equals(localEndpointKey) || buffered.isEmpty());
 
@@ -207,7 +172,7 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
                     continue;
                 }
 
-                int accepted = savedData.getPipeBridgeAcceptedAmount(bindingId, simulated, BRIDGE_BUFFER_CAPACITY);
+                int accepted = savedData.getPumpBridgeAcceptedAmount(bindingId, simulated, BRIDGE_BUFFER_CAPACITY);
                 if (accepted <= 0) {
                     continue;
                 }
@@ -219,42 +184,18 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
                     continue;
                 }
 
-                int stored = savedData.fillPipeBridge(bindingId, localEndpointKey, drained, BRIDGE_BUFFER_CAPACITY);
+                int stored = savedData.fillPumpBridge(bindingId, localEndpointKey, drained, BRIDGE_BUFFER_CAPACITY);
                 if (stored > 0) {
                     transferred = true;
-                    emitDebugLog("bridge_transfer", remoteContext, true, !localTargets.isEmpty());
                     break;
                 }
             }
-        }
-
-        if (!transferred) {
-            emitDebugLog("bridge_no_transfer", remoteContext, !localSources.isEmpty(), !localTargets.isEmpty());
         }
     }
 
     private int getMaxTransferPerTick() {
         int bySpeed = Math.max(MIN_TRANSFER_PER_TICK, Math.round(Math.abs(getSpeed())));
         return Math.min(MAX_TRANSFER_PER_TICK, bySpeed);
-    }
-
-    private int simulateFill(List<ResolvedFluidEndpoint> targets, FluidStack stack) {
-        int accepted = 0;
-        int remaining = stack.getAmount();
-        for (ResolvedFluidEndpoint target : targets) {
-            if (remaining <= 0) {
-                break;
-            }
-            FluidStack attempt = stack.copy();
-            attempt.setAmount(remaining);
-            int filled = target.handler().fill(attempt, FluidAction.SIMULATE);
-            if (filled <= 0) {
-                continue;
-            }
-            accepted += filled;
-            remaining -= filled;
-        }
-        return accepted;
     }
 
     private int executeFill(List<ResolvedFluidEndpoint> targets, FluidStack stack) {
@@ -347,38 +288,6 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
         if (capability != null) {
             endpoints.add(new ResolvedFluidEndpoint(capability, connectedPos, "open_end"));
         }
-    }
-
-    private void emitDebugLog(String stage, @Nullable RemotePumpContext remoteContext, boolean hasLocalSource, boolean hasRemoteDestination) {
-        if (level == null || level.isClientSide || --debugLogCooldown > 0) {
-            return;
-        }
-        debugLogCooldown = 40;
-
-        Direction front = getFront();
-        FluidStack remoteProvided = getRemoteProvidedFluid();
-        PipeConnection frontConnection = getBehaviour(FluidTransportBehaviour.TYPE) == null || front == null
-                ? null
-                : getBehaviour(FluidTransportBehaviour.TYPE).getConnection(front);
-        boolean frontHasFlow = frontConnection != null && frontConnection.hasFlow();
-        FluidStack outward = front == null || getBehaviour(FluidTransportBehaviour.TYPE) == null
-                ? FluidStack.EMPTY
-                : getBehaviour(FluidTransportBehaviour.TYPE).getProvidedOutwardFluid(front);
-
-        CreatePocketFactory.LOGGER.info(
-            "LinkedPump debug stage={} pos={} binding={} speed={} remoteCtx={} remoteFluid={} front={} frontHasFlow={} outward={} hasLocalSource={} hasRemoteDestination={}",
-            stage,
-                worldPosition,
-                bindingId,
-                getSpeed(),
-                remoteContext != null,
-                remoteProvided,
-                front,
-                frontHasFlow,
-                outward,
-            hasLocalSource,
-                hasRemoteDestination
-        );
     }
 
     private RemotePumpResolution resolveRemotePumpContext() {

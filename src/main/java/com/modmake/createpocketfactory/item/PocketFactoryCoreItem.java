@@ -2,7 +2,6 @@ package com.modmake.createpocketfactory.item;
 
 import com.modmake.createpocketfactory.block.LinkedChuteBlock;
 import com.modmake.createpocketfactory.block.entity.LinkedPumpBindingHelper;
-import com.modmake.createpocketfactory.block.entity.LinkedPipeBindingHelper;
 import com.modmake.createpocketfactory.block.ModBlocks;
 import com.modmake.createpocketfactory.block.PocketFactoryEntranceBlock;
 import com.modmake.createpocketfactory.block.PocketFactoryPortalBlock;
@@ -11,7 +10,6 @@ import com.modmake.createpocketfactory.block.entity.LinkedFluidTankBlockEntity;
 import com.modmake.createpocketfactory.block.entity.LinkedItemVaultBlockEntity;
 import com.modmake.createpocketfactory.block.entity.LinkedPumpEndpoint;
 import com.modmake.createpocketfactory.block.entity.BindingEndpointHelper;
-import com.modmake.createpocketfactory.block.entity.LinkedPipeEndpoint;
 import com.modmake.createpocketfactory.block.entity.LinkedStorageBindingHelper;
 import com.modmake.createpocketfactory.block.entity.PocketFactoryPortalBlockEntity;
 import com.modmake.createpocketfactory.block.entity.PocketFactoryEntranceBlockEntity;
@@ -19,8 +17,6 @@ import com.modmake.createpocketfactory.world.LinkedStorageManualBindingHelper;
 import com.modmake.createpocketfactory.world.PocketFactoryDimensions;
 import com.modmake.createpocketfactory.world.PocketFactorySavedData;
 import com.simibubi.create.AllBlocks;
-import com.simibubi.create.content.fluids.pump.PumpBlock;
-import com.simibubi.create.content.fluids.pipes.FluidPipeBlock;
 import com.simibubi.create.content.logistics.chute.AbstractChuteBlock;
 import com.simibubi.create.content.logistics.chute.ChuteBlock;
 import java.util.List;
@@ -99,13 +95,6 @@ public final class PocketFactoryCoreItem extends Item {
             return handleChuteClick((ServerLevel) level, origin, stack, context.getPlayer());
         }
 
-        if (LinkedPipeBindingHelper.isBindablePipe(state) || LinkedPipeBindingHelper.isLinkedPipe(state)) {
-            if (level.isClientSide()) {
-                return InteractionResult.SUCCESS;
-            }
-            return handlePipeClick((ServerLevel) level, origin, stack, context.getPlayer());
-        }
-
         if (LinkedPumpBindingHelper.isBindablePump(state) || LinkedPumpBindingHelper.isLinkedPump(state)) {
             if (level.isClientSide()) {
                 return InteractionResult.SUCCESS;
@@ -123,7 +112,6 @@ public final class PocketFactoryCoreItem extends Item {
         tooltipComponents.add(Component.translatable("tooltip.create_pocket_factory.pocket_factory_internal_eye.link_vault"));
         tooltipComponents.add(Component.translatable("tooltip.create_pocket_factory.pocket_factory_internal_eye.link_tank"));
         tooltipComponents.add(Component.translatable("tooltip.create_pocket_factory.pocket_factory_internal_eye.link_chute"));
-        tooltipComponents.add(Component.translatable("tooltip.create_pocket_factory.pocket_factory_internal_eye.link_pipe"));
         tooltipComponents.add(Component.translatable("tooltip.create_pocket_factory.pocket_factory_internal_eye.link_pump"));
 
         SelectedEndpoint endpoint = getSelectedEndpoint(stack);
@@ -235,10 +223,6 @@ public final class PocketFactoryCoreItem extends Item {
                 notifyPlayer(player, "Linked chute linking now requires selecting the second linked chute directly.");
                 yield InteractionResult.FAIL;
             }
-            case PIPE -> {
-                notifyPlayer(player, "Linked pipe linking now requires selecting the second normal fluid pipe directly.");
-                yield InteractionResult.FAIL;
-            }
             case PUMP -> {
                 notifyPlayer(player, "Linked pump linking now requires selecting the second mechanical pump directly.");
                 yield InteractionResult.FAIL;
@@ -342,111 +326,66 @@ public final class PocketFactoryCoreItem extends Item {
         return InteractionResult.CONSUME;
     }
 
-    private static InteractionResult handlePipeClick(ServerLevel level, BlockPos origin, ItemStack stack, @Nullable Player player) {
-        BlockState state = level.getBlockState(origin);
-        if (LinkedPipeBindingHelper.isLinkedPipe(state)) {
-            notifyPlayer(player, "This pipe is already bound.");
-            return InteractionResult.FAIL;
-        }
-
-        if (!LinkedPipeBindingHelper.isBindablePipe(state)) {
-            return InteractionResult.FAIL;
-        }
-
-        PendingEndpoint pendingEndpoint = getPendingEndpoint(stack);
-        if (pendingEndpoint != null) {
-            if (pendingEndpoint.kind() != EndpointKind.PIPE) {
-                notifyPlayer(player, "Select another pipe or clear the current selection first.");
-                return InteractionResult.FAIL;
-            }
-            if (pendingEndpoint.dimension().equals(level.dimension()) && pendingEndpoint.pos().equals(origin)) {
-                clearPendingEndpoint(stack);
-                notifyPlayer(player, "Pipe selection cleared.");
-                return InteractionResult.CONSUME;
-            }
-            return handleDirectPipeBinding(level, origin, stack, player, pendingEndpoint);
-        }
-
-        setPendingEndpoint(stack, level, origin, EndpointKind.PIPE);
-        notifyPlayer(player, "Pipe selected. Use the core on another normal fluid pipe to finish linking.");
-        return InteractionResult.CONSUME;
-    }
-
     private static InteractionResult handlePumpClick(ServerLevel level, BlockPos origin, ItemStack stack, @Nullable Player player) {
         BlockState state = level.getBlockState(origin);
-        if (LinkedPumpBindingHelper.isLinkedPump(state)) {
-            notifyPlayer(player, "This pump is already bound.");
+        return handleEndpointSelectionClick(
+                level,
+                origin,
+                stack,
+                player,
+                EndpointKind.PUMP,
+                "pump",
+                "another normal mechanical pump",
+                LinkedPumpBindingHelper.isLinkedPump(state),
+                LinkedPumpBindingHelper.isBindablePump(state),
+                PocketFactoryCoreItem::handleDirectPumpBinding
+        );
+    }
+
+    private static InteractionResult handleEndpointSelectionClick(ServerLevel level, BlockPos origin, ItemStack stack,
+                                                                  @Nullable Player player, EndpointKind kind,
+                                                                  String endpointName, String completionTargetDescription,
+                                                                  boolean alreadyBound, boolean bindable,
+                                                                  PendingEndpointBindingHandler bindingHandler) {
+        if (alreadyBound) {
+            notifyPlayer(player, "This " + endpointName + " is already bound.");
             return InteractionResult.FAIL;
         }
 
-        if (!LinkedPumpBindingHelper.isBindablePump(state)) {
+        if (!bindable) {
             return InteractionResult.FAIL;
         }
 
         PendingEndpoint pendingEndpoint = getPendingEndpoint(stack);
         if (pendingEndpoint != null) {
-            if (pendingEndpoint.kind() != EndpointKind.PUMP) {
-                notifyPlayer(player, "Select another pump or clear the current selection first.");
+            if (pendingEndpoint.kind() != kind) {
+                notifyPlayer(player, "Select another " + endpointName + " or clear the current selection first.");
                 return InteractionResult.FAIL;
             }
             if (pendingEndpoint.dimension().equals(level.dimension()) && pendingEndpoint.pos().equals(origin)) {
                 clearPendingEndpoint(stack);
-                notifyPlayer(player, "Pump selection cleared.");
+                notifyPlayer(player, capitalize(endpointName) + " selection cleared.");
                 return InteractionResult.CONSUME;
             }
-            return handleDirectPumpBinding(level, origin, stack, player, pendingEndpoint);
+            return bindingHandler.bind(level, origin, stack, player, pendingEndpoint);
         }
 
-        setPendingEndpoint(stack, level, origin, EndpointKind.PUMP);
-        notifyPlayer(player, "Pump selected. Use the core on another normal mechanical pump to finish linking.");
+        setPendingEndpoint(stack, level, origin, kind);
+        notifyPlayer(player, capitalize(endpointName) + " selected. Use the core on " + completionTargetDescription + " to finish linking.");
         return InteractionResult.CONSUME;
     }
 
-    private static InteractionResult handleDirectPipeBinding(ServerLevel level, BlockPos origin, ItemStack stack,
-                                                             @Nullable Player player, PendingEndpoint pendingEndpoint) {
-        PipePairValidation validation = validateDirectPipePair(level, origin, pendingEndpoint);
-        if (!validation.valid()) {
-            notifyPlayer(player, validation.message());
-            return InteractionResult.FAIL;
+    private static String capitalize(String value) {
+        if (value.isEmpty()) {
+            return value;
         }
+        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
+    }
 
-        PocketFactorySavedData.FactoryRecord factory = validation.factory();
-        if (factory == null) {
-            notifyPlayer(player, "No pocket factory found for the selected internal pipe.");
-            return InteractionResult.FAIL;
-        }
-
-        ServerLevel pendingLevel = level.getServer().getLevel(pendingEndpoint.dimension());
-        if (pendingLevel == null) {
-            clearPendingEndpoint(stack);
-            notifyPlayer(player, "Selected pipe is no longer available.");
-            return InteractionResult.FAIL;
-        }
-
-        boolean pendingInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(pendingEndpoint.dimension());
-        ServerLevel internalLevel = pendingInsidePocket ? pendingLevel : level;
-        BlockPos internalPos = pendingInsidePocket ? pendingEndpoint.pos() : origin;
-        ServerLevel externalLevel = pendingInsidePocket ? level : pendingLevel;
-        BlockPos externalPos = pendingInsidePocket ? origin : pendingEndpoint.pos();
-
-        PocketFactorySavedData savedData = PocketFactorySavedData.get(level.getServer());
-        int bindingId = savedData.createBinding(factory.id(), PocketFactorySavedData.BindingChannel.LINKED_PIPE);
-        if (!bindPipeEndpoint(internalLevel, internalPos, bindingId, factory.id(), true)) {
-            clearPendingEndpoint(stack);
-            notifyPlayer(player, "Binding failed while linking the internal pipe.");
-            return InteractionResult.FAIL;
-        }
-
-        if (!bindPipeEndpoint(externalLevel, externalPos, bindingId, factory.id(), false)) {
-            rollbackDirectPipeBinding(internalLevel, internalPos, bindingId);
-            clearPendingEndpoint(stack);
-            notifyPlayer(player, "Binding failed while linking the second pipe. The first pipe was rolled back.");
-            return InteractionResult.FAIL;
-        }
-
-        clearPendingEndpoint(stack);
-        notifyPlayer(player, "Pipe link created.");
-        return InteractionResult.CONSUME;
+    @FunctionalInterface
+    private interface PendingEndpointBindingHandler {
+        InteractionResult bind(ServerLevel level, BlockPos origin, ItemStack stack, @Nullable Player player,
+                               PendingEndpoint pendingEndpoint);
     }
 
     private static InteractionResult handleDirectPumpBinding(ServerLevel level, BlockPos origin, ItemStack stack,
@@ -625,14 +564,6 @@ public final class PocketFactoryCoreItem extends Item {
             return new HoveredEndpoint(pos, EndpointKind.CHUTE, resolveChuteHoverState(level, pos, selectedEndpoint));
         }
 
-        if (LinkedPipeBindingHelper.isLinkedPipe(state)) {
-            return new HoveredEndpoint(pos, EndpointKind.PIPE, HoverState.BLOCKED);
-        }
-
-        if (LinkedPipeBindingHelper.isBindablePipe(state)) {
-            return new HoveredEndpoint(pos, EndpointKind.PIPE, resolvePipeHoverState(level, pos, selectedEndpoint));
-        }
-
         if (LinkedPumpBindingHelper.isLinkedPump(state)) {
             return new HoveredEndpoint(pos, EndpointKind.PUMP, HoverState.BLOCKED);
         }
@@ -677,25 +608,6 @@ public final class PocketFactoryCoreItem extends Item {
         }
 
         if (selectedEndpoint.kind() != EndpointKind.CHUTE) {
-            return HoverState.BLOCKED;
-        }
-
-        if (selectedEndpoint.dimension().equals(level.dimension()) && selectedEndpoint.pos().equals(pos)) {
-            return HoverState.BLOCKED;
-        }
-
-        boolean selectedInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(selectedEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(level.dimension());
-        return selectedInsidePocket == currentInsidePocket ? HoverState.BLOCKED : HoverState.AVAILABLE;
-    }
-
-    private static HoverState resolvePipeHoverState(Level level, BlockPos pos,
-                                                    @Nullable SelectedEndpoint selectedEndpoint) {
-        if (selectedEndpoint == null) {
-            return HoverState.AVAILABLE;
-        }
-
-        if (selectedEndpoint.kind() != EndpointKind.PIPE) {
             return HoverState.BLOCKED;
         }
 
@@ -825,38 +737,6 @@ public final class PocketFactoryCoreItem extends Item {
         return ChutePairValidation.valid(factory);
     }
 
-    private static PipePairValidation validateDirectPipePair(ServerLevel currentLevel, BlockPos currentPos,
-                                                             PendingEndpoint pendingEndpoint) {
-        ServerLevel pendingLevel = currentLevel.getServer().getLevel(pendingEndpoint.dimension());
-        if (pendingLevel == null) {
-            return PipePairValidation.invalid("Selected pipe is no longer available.");
-        }
-
-        if (pendingEndpoint.kind() != EndpointKind.PIPE) {
-            return PipePairValidation.invalid("Select another normal fluid pipe.");
-        }
-
-        if (!LinkedPipeBindingHelper.isBindablePipe(currentLevel.getBlockState(currentPos))
-                || !LinkedPipeBindingHelper.isBindablePipe(pendingLevel.getBlockState(pendingEndpoint.pos()))) {
-            return PipePairValidation.invalid("Both targets must still be normal fluid pipes.");
-        }
-
-        boolean pendingInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(pendingEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(currentLevel.dimension());
-        if (pendingInsidePocket == currentInsidePocket) {
-            return PipePairValidation.invalid("Select one pipe inside a pocket factory and one pipe outside it.");
-        }
-
-        BlockPos internalPos = pendingInsidePocket ? pendingEndpoint.pos() : currentPos;
-        PocketFactorySavedData savedData = PocketFactorySavedData.get(currentLevel.getServer());
-        PocketFactorySavedData.FactoryRecord factory = PocketFactoryDimensions.findFactoryAt(savedData, internalPos);
-        if (factory == null) {
-            return PipePairValidation.invalid("No pocket factory found for the selected internal pipe.");
-        }
-
-        return PipePairValidation.valid(factory);
-    }
-
     private static PumpPairValidation validateDirectPumpPair(ServerLevel currentLevel, BlockPos currentPos,
                                                              PendingEndpoint pendingEndpoint) {
         ServerLevel pendingLevel = currentLevel.getServer().getLevel(pendingEndpoint.dimension());
@@ -932,45 +812,6 @@ public final class PocketFactoryCoreItem extends Item {
         BlockState state = level.getBlockState(pos);
         if (state.getBlock() instanceof LinkedChuteBlock) {
             level.setBlock(pos, LinkedChuteBlock.toVanillaChuteState(state), net.minecraft.world.level.block.Block.UPDATE_ALL_IMMEDIATE);
-        }
-    }
-
-    private static boolean bindPipeEndpoint(ServerLevel level, BlockPos pos, int bindingId, int factoryId, boolean internalEndpoint) {
-        BlockState state = level.getBlockState(pos);
-        if (!LinkedPipeBindingHelper.isBindablePipe(state)) {
-            return false;
-        }
-
-        level.setBlock(pos, LinkedPipeBindingHelper.toLinkedState(state), net.minecraft.world.level.block.Block.UPDATE_ALL_IMMEDIATE);
-        if (!(level.getBlockEntity(pos) instanceof LinkedPipeEndpoint linkedPipe)) {
-            level.setBlock(pos, state, net.minecraft.world.level.block.Block.UPDATE_ALL_IMMEDIATE);
-            return false;
-        }
-
-        PocketFactorySavedData savedData = PocketFactorySavedData.get(level.getServer());
-        String endpointKey = BindingEndpointHelper.endpointKey(level, pos);
-        int resolvedBindingId = savedData.bindEndpointToBinding(
-                bindingId,
-                factoryId,
-                PocketFactorySavedData.BindingChannel.LINKED_PIPE,
-                internalEndpoint ? PocketFactorySavedData.EndpointRole.INTERNAL : PocketFactorySavedData.EndpointRole.EXTERNAL,
-                endpointKey
-        );
-        if (resolvedBindingId <= 0) {
-            level.setBlock(pos, state, net.minecraft.world.level.block.Block.UPDATE_ALL_IMMEDIATE);
-            return false;
-        }
-
-        linkedPipe.setBinding(resolvedBindingId, factoryId, internalEndpoint);
-        return true;
-    }
-
-    private static void rollbackDirectPipeBinding(ServerLevel level, BlockPos pos, int bindingId) {
-        PocketFactorySavedData savedData = PocketFactorySavedData.get(level.getServer());
-        savedData.disposeBinding(bindingId, PocketFactorySavedData.BindingChannel.LINKED_PIPE);
-        BlockState state = level.getBlockState(pos);
-        if (LinkedPipeBindingHelper.isLinkedPipe(state)) {
-            level.setBlock(pos, LinkedPipeBindingHelper.toVanillaState(state), net.minecraft.world.level.block.Block.UPDATE_ALL_IMMEDIATE);
         }
     }
 
@@ -1052,7 +893,6 @@ public final class PocketFactoryCoreItem extends Item {
         ITEM_VAULT,
         FLUID_TANK,
         CHUTE,
-        PIPE,
         PUMP,
         PORTAL;
 
@@ -1067,7 +907,7 @@ public final class PocketFactoryCoreItem extends Item {
             return switch (this) {
                 case ITEM_VAULT -> LinkedStorageManualBindingHelper.StorageKind.ITEM_VAULT;
                 case FLUID_TANK -> LinkedStorageManualBindingHelper.StorageKind.FLUID_TANK;
-                case CHUTE, PIPE, PUMP, PORTAL -> null;
+                case CHUTE, PUMP, PORTAL -> null;
             };
         }
 
@@ -1076,7 +916,6 @@ public final class PocketFactoryCoreItem extends Item {
                 case ITEM_VAULT -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_item_vault";
                 case FLUID_TANK -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_fluid_tank";
                 case CHUTE -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_linked_chute";
-                case PIPE -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_linked_pipe";
                 case PUMP -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_linked_pump";
                 case PORTAL -> "tooltip.create_pocket_factory.pocket_factory_internal_eye.selected_portal";
             };
@@ -1114,16 +953,6 @@ public final class PocketFactoryCoreItem extends Item {
         }
     }
 
-    private record PipePairValidation(boolean valid, @Nullable PocketFactorySavedData.FactoryRecord factory, @Nullable String message) {
-        private static PipePairValidation valid(PocketFactorySavedData.FactoryRecord factory) {
-            return new PipePairValidation(true, factory, null);
-        }
-
-        private static PipePairValidation invalid(String message) {
-            return new PipePairValidation(false, null, message);
-        }
-    }
-
     private record PumpPairValidation(boolean valid, @Nullable PocketFactorySavedData.FactoryRecord factory, @Nullable String message) {
         private static PumpPairValidation valid(PocketFactorySavedData.FactoryRecord factory) {
             return new PumpPairValidation(true, factory, null);
@@ -1155,10 +984,6 @@ public final class PocketFactoryCoreItem extends Item {
 
         public boolean isPortal() {
             return kind == EndpointKind.PORTAL;
-        }
-
-        public boolean isPipe() {
-            return kind == EndpointKind.PIPE;
         }
 
         public boolean isPump() {

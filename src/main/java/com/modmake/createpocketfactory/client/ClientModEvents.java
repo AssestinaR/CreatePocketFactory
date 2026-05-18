@@ -43,7 +43,6 @@ public final class ClientModEvents {
             );
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.LINKED_CHUTE.get(), RenderType.cutoutMipped());
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.LINKED_FLUID_TANK.get(), RenderType.cutoutMipped());
-            // ItemBlockRenderTypes.setRenderLayer(ModBlocks.LINKED_GLASS_FLUID_PIPE.get(), RenderType.cutoutMipped());
         });
     }
 }
