@@ -19,7 +19,7 @@ public final class ModItems {
     public static final DeferredItem<PocketFactoryItem> POCKET_FACTORY_EYE = ITEMS.registerItem(
             "pocket_factory_eye",
             PocketFactoryItem::new,
-            new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON)
+            new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)
     );
 
         public static final DeferredItem<PocketFactoryCoreItem> POCKET_FACTORY_INTERNAL_EYE = ITEMS.registerItem(
@@ -38,19 +38,19 @@ public final class ModItems {
         );
         public static final DeferredItem<LinkedChuteBlockItem> LINKED_CHUTE = ITEMS.register(
             "linked_chute",
-            () -> new LinkedChuteBlockItem(ModBlocks.LINKED_CHUTE.get(), new Item.Properties())
+            () -> new LinkedChuteBlockItem(ModBlocks.LINKED_CHUTE.get(), linkedProperties())
         );
-    public static final DeferredItem<BlockItem> LINKED_CLUTCH = registerBlockItem(ModBlocks.LINKED_CLUTCH);
-    public static final DeferredItem<BlockItem> LINKED_MECHANICAL_PUMP = registerBlockItem(ModBlocks.LINKED_MECHANICAL_PUMP);
+    public static final DeferredItem<BlockItem> LINKED_CLUTCH = registerLinkedBlockItem(ModBlocks.LINKED_CLUTCH);
+    public static final DeferredItem<BlockItem> LINKED_MECHANICAL_PUMP = registerLinkedBlockItem(ModBlocks.LINKED_MECHANICAL_PUMP);
     public static final DeferredItem<BlockItem> POCKET_FACTORY_BLOCK_A = registerBlockItem(ModBlocks.POCKET_FACTORY_BLOCK_A);
     public static final DeferredItem<BlockItem> POCKET_FACTORY_BLOCK_B = registerBlockItem(ModBlocks.POCKET_FACTORY_BLOCK_B);
         public static final DeferredItem<LinkedItemVaultBlockItem> LINKED_ITEM_VAULT = ITEMS.register(
             "linked_item_vault",
-            () -> new LinkedItemVaultBlockItem(ModBlocks.LINKED_ITEM_VAULT.get(), new Item.Properties())
+            () -> new LinkedItemVaultBlockItem(ModBlocks.LINKED_ITEM_VAULT.get(), linkedProperties())
         );
         public static final DeferredItem<LinkedFluidTankBlockItem> LINKED_FLUID_TANK = ITEMS.register(
             "linked_fluid_tank",
-            () -> new LinkedFluidTankBlockItem(ModBlocks.LINKED_FLUID_TANK.get(), new Item.Properties())
+            () -> new LinkedFluidTankBlockItem(ModBlocks.LINKED_FLUID_TANK.get(), linkedProperties())
         );
 
     private ModItems() {
@@ -78,7 +78,15 @@ public final class ModItems {
         }
     }
 
+    private static Item.Properties linkedProperties() {
+        return new Item.Properties();
+    }
+
     private static DeferredItem<BlockItem> registerBlockItem(DeferredBlock<? extends Block> block) {
-        return ITEMS.registerSimpleBlockItem(block);
+        return ITEMS.register(block.getId().getPath(), () -> new BlockItem(block.get(), new Item.Properties()));
+    }
+
+    private static DeferredItem<BlockItem> registerLinkedBlockItem(DeferredBlock<? extends Block> block) {
+        return ITEMS.register(block.getId().getPath(), () -> new LinkedBlockItem(block.get(), linkedProperties()));
     }
 }

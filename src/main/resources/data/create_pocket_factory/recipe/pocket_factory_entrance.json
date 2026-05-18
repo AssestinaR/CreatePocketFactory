@@ -2,16 +2,16 @@
   "type": "minecraft:crafting_shaped",
   "category": "building",
   "pattern": [
-    "WGW",
-    "GCG",
-    "WGW"
+    "APA",
+    "PCP",
+    "APA"
   ],
   "key": {
-    "W": {
-      "item": "minecraft:white_wool"
+    "A": {
+      "item": "create:andesite_alloy"
     },
-    "G": {
-      "item": "minecraft:gray_wool"
+    "P": {
+      "tag": "minecraft:planks"
     },
     "C": {
       "item": "create_pocket_factory:pocket_factory_internal_eye"

@@ -110,7 +110,10 @@ public class LinkedFluidTankBlock extends FluidTankBlock {
 
     @Override
     public ItemStack getCloneItemStack(BlockState state, HitResult target, LevelReader level, BlockPos pos, Player player) {
-        return new ItemStack(AllBlocks.FLUID_TANK.get());
+        return com.modmake.createpocketfactory.item.ModEnchantments.applyLinkedEnchantment(
+                new ItemStack(asItem()),
+                player.level().registryAccess()
+        );
     }
 
     private static LinkedFluidTankBlockEntity resolveBoundController(LinkedFluidTankBlockEntity tank) {

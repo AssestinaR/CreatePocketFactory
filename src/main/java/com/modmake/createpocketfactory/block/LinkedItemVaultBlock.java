@@ -142,7 +142,10 @@ public class LinkedItemVaultBlock extends ItemVaultBlock {
 
     @Override
     public ItemStack getCloneItemStack(BlockState state, HitResult target, LevelReader level, BlockPos pos, Player player) {
-        return new ItemStack(AllBlocks.ITEM_VAULT.get());
+        return com.modmake.createpocketfactory.item.ModEnchantments.applyLinkedEnchantment(
+                new ItemStack(asItem()),
+                player.level().registryAccess()
+        );
     }
 
     private static LinkedItemVaultBlockEntity resolveBoundController(LinkedItemVaultBlockEntity vault) {

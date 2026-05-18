@@ -15,8 +15,11 @@ import com.simibubi.create.content.fluids.pump.PumpBlockEntity;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -65,5 +68,13 @@ public class LinkedMechanicalPumpBlock extends PumpBlock {
     @Override
     protected List<ItemStack> getDrops(BlockState state, net.minecraft.world.level.storage.loot.LootParams.Builder params) {
         return List.of(AllBlocks.MECHANICAL_PUMP.asStack());
+    }
+
+    @Override
+    public ItemStack getCloneItemStack(BlockState state, HitResult target, LevelReader level, BlockPos pos, Player player) {
+        return com.modmake.createpocketfactory.item.ModEnchantments.applyLinkedEnchantment(
+                new ItemStack(asItem()),
+                player.level().registryAccess()
+        );
     }
 }

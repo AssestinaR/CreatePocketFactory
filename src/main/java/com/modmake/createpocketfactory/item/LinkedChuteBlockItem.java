@@ -3,6 +3,7 @@ package com.modmake.createpocketfactory.item;
 import java.util.List;
 import java.util.OptionalInt;
 import com.simibubi.create.content.logistics.chute.ChuteItem;
+import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -15,6 +16,7 @@ import net.minecraft.world.item.Item.TooltipContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.Block;
 
 public final class LinkedChuteBlockItem extends ChuteItem {
@@ -24,6 +26,11 @@ public final class LinkedChuteBlockItem extends ChuteItem {
 
     public LinkedChuteBlockItem(Block block, Properties properties) {
         super(block, properties);
+    }
+
+    @Override
+    public boolean supportsEnchantment(ItemStack stack, Holder<Enchantment> enchantment) {
+        return ModEnchantments.isLinkedEnchantment(enchantment);
     }
 
     @Override

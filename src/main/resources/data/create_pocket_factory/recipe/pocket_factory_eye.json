@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "RGR",
+    "GCG",
+    "RNR"
+  ],
+  "key": {
+    "R": {
+      "item": "create:rose_quartz"
+    },
+    "G": {
+      "item": "minecraft:glass"
+    },
+    "C": {
+      "item": "create_pocket_factory:pocket_factory_internal_eye"
+    },
+    "N": {
+      "item": "minecraft:nether_star"
+    }
+  },
+  "result": {
+    "id": "create_pocket_factory:pocket_factory_eye",
+    "count": 1
+  }
+}

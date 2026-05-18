@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "create_pocket_factory:linked_chute",
+    "create_pocket_factory:linked_clutch",
+    "create_pocket_factory:linked_mechanical_pump",
+    "create_pocket_factory:linked_item_vault",
+    "create_pocket_factory:linked_fluid_tank"
+  ]
+}

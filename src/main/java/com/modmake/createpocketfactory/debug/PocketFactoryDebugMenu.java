@@ -15,7 +15,7 @@ public final class PocketFactoryDebugMenu {
     private PocketFactoryDebugMenu() {
     }
 
-    public static boolean canUse(ServerPlayer player) {
+    public static boolean canUsePortable(ServerPlayer player) {
         for (ItemStack stack : player.getInventory().items) {
             if (stack.is(ModItems.POCKET_FACTORY_EYE.get())) {
                 return true;
@@ -29,7 +29,15 @@ public final class PocketFactoryDebugMenu {
         return false;
     }
 
-    public static void open(ServerPlayer player) {
+    public static void openPortable(ServerPlayer player) {
+        open(player, false, "/pocketfactory portable");
+    }
+
+    public static void openAdmin(ServerPlayer player) {
+        open(player, true, "/pocketfactory debug");
+    }
+
+    private static void open(ServerPlayer player, boolean allowRecovery, String commandRoot) {
         PocketFactorySavedData savedData = PocketFactorySavedData.get(player.server);
 
         player.sendSystemMessage(Component.empty());
@@ -43,18 +51,18 @@ public final class PocketFactoryDebugMenu {
         if (player.level().dimension() == PocketFactoryDimensions.LEVEL_KEY) {
             player.sendSystemMessage(actionLine(
                     Component.translatable("debug.create_pocket_factory.menu.action.return"),
-                    "/pocketfactory debug return"
+                commandRoot + " return"
             ));
         }
 
         player.sendSystemMessage(actionLine(
                 Component.translatable("debug.create_pocket_factory.menu.action.refresh"),
-                "/pocketfactory debug open"
+            commandRoot + " open"
         ));
 
         savedData.getFactories().stream()
                 .sorted(Comparator.comparingInt(PocketFactorySavedData.FactoryRecord::id))
-                .forEach(factory -> player.sendSystemMessage(factoryLine(factory)));
+            .forEach(factory -> player.sendSystemMessage(factoryLine(factory, allowRecovery, commandRoot)));
 
         if (savedData.getFactories().isEmpty()) {
             player.sendSystemMessage(Component.translatable("debug.create_pocket_factory.menu.empty").withStyle(ChatFormatting.DARK_GRAY));
@@ -66,7 +74,7 @@ public final class PocketFactoryDebugMenu {
                 .append(clickable(label, command, ChatFormatting.AQUA));
     }
 
-    private static MutableComponent factoryLine(PocketFactorySavedData.FactoryRecord factory) {
+    private static MutableComponent factoryLine(PocketFactorySavedData.FactoryRecord factory, boolean allowRecovery, String commandRoot) {
         MutableComponent line = Component.literal("#" + factory.id() + " ")
                 .withStyle(ChatFormatting.GOLD)
                 .append(Component.translatable(
@@ -89,10 +97,10 @@ public final class PocketFactoryDebugMenu {
         }
 
         line.append(Component.literal(" "));
-        line.append(clickable(Component.translatable("debug.create_pocket_factory.menu.action.teleport"), "/pocketfactory debug tp " + factory.id(), ChatFormatting.GREEN));
-        if (!factory.hasEntrance()) {
+        line.append(clickable(Component.translatable("debug.create_pocket_factory.menu.action.teleport"), commandRoot + " tp " + factory.id(), ChatFormatting.GREEN));
+        if (allowRecovery && !factory.hasEntrance()) {
             line.append(Component.literal(" "));
-            line.append(clickable(Component.translatable("debug.create_pocket_factory.menu.action.recover"), "/pocketfactory debug recover " + factory.id(), ChatFormatting.YELLOW));
+            line.append(clickable(Component.translatable("debug.create_pocket_factory.menu.action.recover"), commandRoot + " recover " + factory.id(), ChatFormatting.YELLOW));
         }
         return line;
     }

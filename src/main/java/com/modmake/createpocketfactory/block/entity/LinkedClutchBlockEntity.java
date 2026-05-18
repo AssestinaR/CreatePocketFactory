@@ -1,6 +1,7 @@
 package com.modmake.createpocketfactory.block.entity;
 
 import java.util.List;
+import java.util.Objects;
 
 import javax.annotation.Nullable;
 
@@ -42,6 +43,10 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
     private float bridgedAvailableStress;
     private @Nullable Direction bridgedInputFace;
     private int pendingBootstrapTicks;
+    private boolean bridgeCacheValid;
+    private boolean cachedLocalPowered;
+    private @Nullable PocketFactorySavedData.ClutchDriveState cachedLocalDriveState;
+    private int cachedBridgeVersion = Integer.MIN_VALUE;
 
     public LinkedClutchBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -78,6 +83,7 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
             : null;
         super.read(compound, registries, clientPacket);
         pendingBootstrapTicks = hasBinding() ? 2 : 0;
+        invalidateBridgeCache();
     }
 
     @Override
@@ -119,13 +125,29 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
             return;
         }
 
+        boolean localPowered = getBlockState().getValue(BlockStateProperties.POWERED);
+        DriveInput localPhysicalInput = describeLocalDriveInput();
+        PocketFactorySavedData.ClutchDriveState localDriveState = toBridgeDriveState(localPhysicalInput);
+        PocketFactorySavedData savedData = PocketFactorySavedData.get(serverLevel.getServer());
+
+        PocketFactorySavedData.ClutchBridgeSnapshot cachedSnapshot = null;
+        if (bridgeCacheValid
+            && cachedLocalPowered == localPowered
+            && Objects.equals(cachedLocalDriveState, localDriveState)) {
+            cachedSnapshot = savedData.getClutchSnapshot(bindingId);
+            if (cachedSnapshot.version() == cachedBridgeVersion) {
+                return;
+            }
+        }
+
         OperatingMode previousMode = operatingMode;
         float previousBridgedSpeed = bridgedGeneratedSpeed;
         float previousBridgedAvailableStress = bridgedAvailableStress;
         Direction previousBridgedInputFace = bridgedInputFace;
         boolean previousCrossMode = crossMode;
 
-        refreshBridgeMode(serverLevel);
+        int bridgeVersion = refreshBridgeMode(savedData, localPowered, localPhysicalInput, localDriveState, cachedSnapshot);
+        cacheBridgeState(localPowered, localDriveState, bridgeVersion);
 
         boolean modeChanged = previousMode != operatingMode;
         boolean bridgeChanged = Float.compare(previousBridgedSpeed, bridgedGeneratedSpeed) != 0
@@ -221,6 +243,7 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
         this.bindingId = bindingId;
         this.factoryId = factoryId;
         this.internalEndpoint = internalEndpoint;
+        invalidateBridgeCache();
         if (!changed) {
             return;
         }
@@ -257,6 +280,30 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
         return selectedInput;
     }
 
+    public @Nullable Direction getDisplayedInputFace() {
+        if (source != null) {
+            return super.getSourceFacing();
+        }
+
+        if (isGeneratedBridgeMode() && bridgedInputFace != null) {
+            return bridgedInputFace;
+        }
+
+        DriveInput localInput = describeLocalDriveInput();
+        if (localInput == null) {
+            return null;
+        }
+
+        return Direction.fromAxisAndDirection(
+            getBlockState().getValue(BlockStateProperties.AXIS),
+            localInput.axisDirection());
+    }
+
+    public @Nullable Direction getDisplayedOutputFace() {
+        Direction inputFace = getDisplayedInputFace();
+        return inputFace == null ? null : inputFace.getOpposite();
+    }
+
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
         super.addToGoggleTooltip(tooltip, isPlayerSneaking);
@@ -281,35 +328,33 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
         return true;
     }
 
-    private void refreshBridgeMode(ServerLevel serverLevel) {
-        if (!hasBinding() || serverLevel.getServer() == null) {
+    private int refreshBridgeMode(PocketFactorySavedData savedData, boolean localPowered,
+                                  @Nullable DriveInput localPhysicalInput,
+                                  @Nullable PocketFactorySavedData.ClutchDriveState localDriveState,
+                                  @Nullable PocketFactorySavedData.ClutchBridgeSnapshot cachedSnapshot) {
+        if (!hasBinding()) {
             clearBridgeState();
-            return;
+            return Integer.MIN_VALUE;
         }
 
-        PocketFactorySavedData savedData = PocketFactorySavedData.get(serverLevel.getServer());
-        DriveInput localPhysicalInput = describeLocalDriveInput();
-        PocketFactorySavedData.ClutchDriveState localDriveState = toBridgeDriveState(localPhysicalInput);
-        PocketFactorySavedData.ClutchBridgeSnapshot snapshot = savedData.updateClutchEndpointState(
-            bindingId,
-            localRole(),
-            getBlockState().getValue(BlockStateProperties.POWERED),
-            localDriveState);
+        PocketFactorySavedData.ClutchBridgeSnapshot snapshot = cachedSnapshot != null
+            ? cachedSnapshot
+            : savedData.updateClutchEndpointState(bindingId, localRole(), localPowered, localDriveState);
 
         PocketFactorySavedData.ClutchEndpointSnapshot localSnapshot = getSnapshotForRole(snapshot, localRole());
         PocketFactorySavedData.ClutchEndpointSnapshot remoteSnapshot = getSnapshotForRole(snapshot, oppositeRole());
         if (localSnapshot == null || remoteSnapshot == null) {
             clearBridgeState();
-            return;
+            return snapshot.version();
         }
 
-        boolean localPowered = localSnapshot.powered();
+        boolean localEndpointPowered = localSnapshot.powered();
         boolean remotePowered = remoteSnapshot.powered();
         PocketFactorySavedData.ClutchDriveState remoteBridgeDrive = remoteSnapshot.driveState();
         DriveInput localInput = fromBridgeDriveState(localSnapshot.driveState());
         DriveInput remoteInput = fromBridgeDriveState(remoteSnapshot.driveState());
 
-        if (localPowered == remotePowered) {
+        if (localEndpointPowered == remotePowered) {
             crossMode = true;
 
             if (localInput != null && remoteInput == null) {
@@ -317,7 +362,7 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
                 bridgedGeneratedSpeed = 0;
                 bridgedAvailableStress = 0;
                 bridgedInputFace = null;
-                return;
+                return snapshot.version();
             }
 
             if (localInput == null && remoteInput != null) {
@@ -327,7 +372,7 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
                 bridgedInputFace = Direction.fromAxisAndDirection(
                     getBlockState().getValue(BlockStateProperties.AXIS),
                     remoteInput.axisDirection());
-                return;
+                return snapshot.version();
             }
 
             if (localInput == null && remoteInput == null) {
@@ -335,7 +380,7 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
                 bridgedGeneratedSpeed = 0;
                 bridgedAvailableStress = 0;
                 bridgedInputFace = null;
-                return;
+                return snapshot.version();
             }
 
             operatingMode = OperatingMode.CROSS_BIDIRECTIONAL;
@@ -344,7 +389,7 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
             bridgedInputFace = Direction.fromAxisAndDirection(
                 getBlockState().getValue(BlockStateProperties.AXIS),
                 remoteInput.axisDirection());
-            return;
+            return snapshot.version();
         }
 
         crossMode = false;
@@ -352,6 +397,7 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
         bridgedAvailableStress = 0;
         bridgedInputFace = null;
         operatingMode = localPhysicalInput != null ? OperatingMode.LOCAL_DIRECT : OperatingMode.LOCAL_PASSIVE;
+        return snapshot.version();
     }
 
     private void clearBridgeState() {
@@ -430,8 +476,25 @@ public class LinkedClutchBlockEntity extends ClutchBlockEntity implements IHaveG
         bridgedGeneratedSpeed = 0;
         bridgedAvailableStress = 0;
         bridgedInputFace = null;
+        invalidateBridgeCache();
         networkDirty = false;
         updateSpeed = true;
+    }
+
+    private void cacheBridgeState(boolean localPowered,
+                                  @Nullable PocketFactorySavedData.ClutchDriveState localDriveState,
+                                  int bridgeVersion) {
+        bridgeCacheValid = true;
+        cachedLocalPowered = localPowered;
+        cachedLocalDriveState = localDriveState;
+        cachedBridgeVersion = bridgeVersion;
+    }
+
+    private void invalidateBridgeCache() {
+        bridgeCacheValid = false;
+        cachedLocalPowered = false;
+        cachedLocalDriveState = null;
+        cachedBridgeVersion = Integer.MIN_VALUE;
     }
 
     private void syncGeneratedBridgeStress() {

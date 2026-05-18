@@ -1,7 +1,6 @@
 package com.modmake.createpocketfactory.item;
 
 import com.modmake.createpocketfactory.debug.PocketFactoryDebugMenu;
-import com.modmake.createpocketfactory.world.PocketFactoryDimensions;
 import java.util.List;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -27,7 +26,11 @@ public final class PocketFactoryItem extends Item {
             return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
         }
 
-        PocketFactoryDebugMenu.open(serverPlayer);
+        if (!PocketFactoryDebugMenu.canUsePortable(serverPlayer)) {
+            return InteractionResultHolder.fail(stack);
+        }
+
+        PocketFactoryDebugMenu.openPortable(serverPlayer);
         player.getCooldowns().addCooldown(this, 20);
         return InteractionResultHolder.success(stack);
     }

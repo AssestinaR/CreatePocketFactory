@@ -4,6 +4,7 @@ import com.modmake.createpocketfactory.CreatePocketFactory;
 import com.modmake.createpocketfactory.block.ModBlocks;
 import com.modmake.createpocketfactory.block.entity.ModBlockEntities;
 import com.modmake.createpocketfactory.client.render.PocketFactoryEntranceRenderer;
+import com.modmake.createpocketfactory.foundation.ponder.PocketFactoryPonderPlugin;
 import com.simibubi.create.AllPartialModels;
 import com.simibubi.create.CreateClient;
 import com.simibubi.create.content.fluids.pump.PumpRenderer;
@@ -14,6 +15,7 @@ import com.simibubi.create.content.fluids.tank.FluidTankModel;
 import com.simibubi.create.content.fluids.tank.FluidTankRenderer;
 import com.simibubi.create.content.logistics.chute.ChuteRenderer;
 import com.simibubi.create.foundation.block.connected.CTModel;
+import net.createmod.ponder.foundation.PonderIndex;
 import dev.engine_room.flywheel.lib.visualization.SimpleBlockEntityVisualizer;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
@@ -41,6 +43,7 @@ public final class ClientModEvents {
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
+            PonderIndex.addPlugin(new PocketFactoryPonderPlugin());
             SimpleBlockEntityVisualizer.builder(ModBlockEntities.LINKED_CLUTCH.get())
                 .factory(SplitShaftVisual::new)
                 .skipVanillaRender(blockEntity -> false)

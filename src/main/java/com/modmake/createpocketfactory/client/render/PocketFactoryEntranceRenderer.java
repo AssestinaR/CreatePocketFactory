@@ -39,7 +39,7 @@ public final class PocketFactoryEntranceRenderer implements BlockEntityRenderer<
         float rotation = ((blockEntity.getLevel() == null ? 0L : blockEntity.getLevel().getGameTime()) + partialTick) * 2.0F;
 
         poseStack.pushPose();
-        poseStack.translate(0.5D, 0.52D, 0.5D);
+        poseStack.translate(0.5D, 0.505D, 0.5D);
         poseStack.mulPose(Axis.XP.rotationDegrees(18.0F));
         poseStack.mulPose(Axis.YP.rotationDegrees(rotation));
 

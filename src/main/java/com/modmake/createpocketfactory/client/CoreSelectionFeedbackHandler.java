@@ -1,6 +1,8 @@
 package com.modmake.createpocketfactory.client;
 
+import com.modmake.createpocketfactory.block.entity.LinkedClutchBlockEntity;
 import com.modmake.createpocketfactory.item.PocketFactoryCoreItem;
+import com.modmake.createpocketfactory.item.PocketFactoryCoreItem.EndpointKind;
 import com.modmake.createpocketfactory.item.PocketFactoryCoreItem.HoveredEndpoint;
 import com.modmake.createpocketfactory.item.PocketFactoryCoreItem.SelectedEndpoint;
 import com.simibubi.create.content.fluids.tank.FluidTankBlockEntity;
@@ -28,7 +30,9 @@ public final class CoreSelectionFeedbackHandler {
     private static final String HOVERED_OUTLINE_SLOT = "create_pocket_factory_core_hover";
     private static final int SELECTED_COLOR = 0xD2B46D;
     private static final int AVAILABLE_COLOR = 0x5DBB63;
+    private static final int OUTPUT_COLOR = 0x4A90E2;
     private static final int BLOCKED_COLOR = 0xD95C5C;
+    private static final double FACE_SLICE_THICKNESS = 1 / 16d;
 
     private CoreSelectionFeedbackHandler() {
     }
@@ -49,7 +53,7 @@ public final class CoreSelectionFeedbackHandler {
 
         SelectedEndpoint endpoint = PocketFactoryCoreItem.getSelectedEndpoint(heldItem);
         if (endpoint != null && level.dimension().equals(endpoint.dimension())) {
-            drawOutline(SELECTED_OUTLINE_SLOT, resolveBounds(level, endpoint.pos()), SELECTED_COLOR);
+            drawSelectedFeedback(level, endpoint);
         }
 
         if (!(minecraft.hitResult instanceof BlockHitResult blockHitResult) || minecraft.hitResult.getType() != HitResult.Type.BLOCK) {
@@ -61,13 +65,81 @@ public final class CoreSelectionFeedbackHandler {
             return;
         }
 
-        drawOutline(HOVERED_OUTLINE_SLOT, resolveBounds(level, hoveredEndpoint.pos()), hoveredEndpoint.isAvailable() ? AVAILABLE_COLOR : BLOCKED_COLOR);
+        drawHoveredFeedback(level, blockHitResult, hoveredEndpoint);
     }
 
     private static void drawOutline(String slot, AABB bounds, int color) {
         Outliner.getInstance().showAABB(slot, bounds)
                 .colored(color)
                 .lineWidth(1 / 16f);
+    }
+
+    private static void drawSelectedFeedback(Level level, SelectedEndpoint endpoint) {
+        if (endpoint.kind() == EndpointKind.CLUTCH && drawClutchRoleOutlines(level, endpoint.pos(), SELECTED_OUTLINE_SLOT)) {
+            return;
+        }
+
+        drawOutline(SELECTED_OUTLINE_SLOT, resolveBounds(level, endpoint.pos()), SELECTED_COLOR);
+    }
+
+    private static void drawHoveredFeedback(Level level, BlockHitResult hitResult, HoveredEndpoint hoveredEndpoint) {
+        if (hoveredEndpoint.kind() == EndpointKind.CLUTCH) {
+            drawFaceOutline(HOVERED_OUTLINE_SLOT, fullBlockBounds(hoveredEndpoint.pos()), hitResult.getDirection(),
+                    hoveredEndpoint.isAvailable() ? AVAILABLE_COLOR : BLOCKED_COLOR);
+            drawClutchRoleOutlines(level, hoveredEndpoint.pos(), HOVERED_OUTLINE_SLOT + "_role");
+            return;
+        }
+
+        drawOutline(HOVERED_OUTLINE_SLOT, resolveBounds(level, hoveredEndpoint.pos()), hoveredEndpoint.isAvailable() ? AVAILABLE_COLOR : BLOCKED_COLOR);
+    }
+
+    private static boolean drawClutchRoleOutlines(Level level, BlockPos pos, String slotPrefix) {
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (!(blockEntity instanceof LinkedClutchBlockEntity clutch)) {
+            return false;
+        }
+
+        AABB bounds = fullBlockBounds(pos);
+        boolean drewAny = false;
+
+        if (clutch.getDisplayedInputFace() != null) {
+            drawFaceOutline(slotPrefix + "_input", bounds, clutch.getDisplayedInputFace(), AVAILABLE_COLOR);
+            drewAny = true;
+        }
+
+        if (clutch.getDisplayedOutputFace() != null) {
+            drawFaceOutline(slotPrefix + "_output", bounds, clutch.getDisplayedOutputFace(), OUTPUT_COLOR);
+            drewAny = true;
+        }
+
+        return drewAny;
+    }
+
+    private static void drawFaceOutline(String slot, AABB bounds, net.minecraft.core.Direction face, int color) {
+        drawOutline(slot, resolveFaceBounds(bounds, face), color);
+    }
+
+    private static AABB resolveFaceBounds(AABB bounds, net.minecraft.core.Direction face) {
+        double minX = bounds.minX;
+        double minY = bounds.minY;
+        double minZ = bounds.minZ;
+        double maxX = bounds.maxX;
+        double maxY = bounds.maxY;
+        double maxZ = bounds.maxZ;
+        double thickness = Math.min(FACE_SLICE_THICKNESS, Math.min(maxX - minX, Math.min(maxY - minY, maxZ - minZ)));
+
+        return switch (face) {
+            case DOWN -> new AABB(minX, minY, minZ, maxX, minY + thickness, maxZ);
+            case UP -> new AABB(minX, maxY - thickness, minZ, maxX, maxY, maxZ);
+            case NORTH -> new AABB(minX, minY, minZ, maxX, maxY, minZ + thickness);
+            case SOUTH -> new AABB(minX, minY, maxZ - thickness, maxX, maxY, maxZ);
+            case WEST -> new AABB(minX, minY, minZ, minX + thickness, maxY, maxZ);
+            case EAST -> new AABB(maxX - thickness, minY, minZ, maxX, maxY, maxZ);
+        };
+    }
+
+    private static AABB fullBlockBounds(BlockPos pos) {
+        return blockBounds(pos, 1, 1, 1);
     }
 
     private static AABB resolveBounds(Level level, BlockPos pos) {
