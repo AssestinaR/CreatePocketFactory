@@ -1,0 +1,17 @@
+{
+  "type": "create_pocket_factory:pocket_factory_type",
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "biome": "create_pocket_factory:pocket_factory",
+      "features": false,
+      "lakes": false,
+      "layers": [
+        {
+          "block": "minecraft:air",
+          "height": 1
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "WGW",
+    "GCG",
+    "WGW"
+  ],
+  "key": {
+    "W": {
+      "item": "minecraft:white_wool"
+    },
+    "G": {
+      "item": "minecraft:gray_wool"
+    },
+    "C": {
+      "item": "create_pocket_factory:pocket_factory_internal_eye"
+    }
+  },
+  "result": {
+    "id": "create_pocket_factory:pocket_factory_entrance",
+    "count": 1
+  }
+}

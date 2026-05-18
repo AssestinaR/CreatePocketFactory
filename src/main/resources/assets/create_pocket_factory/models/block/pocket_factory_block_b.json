@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "create_pocket_factory:block/pocket_factory_block_b",
+    "particle": "create_pocket_factory:block/pocket_factory_block_b"
+  }
+}

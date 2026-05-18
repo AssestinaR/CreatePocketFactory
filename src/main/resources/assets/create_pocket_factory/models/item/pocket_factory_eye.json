@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "create_pocket_factory:item/pocket_factory_eye"
+  }
+}

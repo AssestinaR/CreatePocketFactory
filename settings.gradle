@@ -1,0 +1,19 @@
+pluginManagement {
+    repositories {
+        maven {
+            name = 'Aliyun Maven Public'
+            url = 'https://maven.aliyun.com/repository/public'
+        }
+        maven {
+            name = 'Aliyun Gradle Plugin'
+            url = 'https://maven.aliyun.com/repository/gradle-plugin'
+        }
+        gradlePluginPortal()
+        maven {
+            name = 'NeoForged Releases'
+            url = 'https://maven.neoforged.net/releases'
+        }
+    }
+}
+
+rootProject.name = 'create-pocket-factory'

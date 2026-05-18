@@ -1,0 +1,20 @@
+{
+  "textures": {
+    "portal": "create_pocket_factory:block/pocket_factory_entrance",
+    "particle": "create_pocket_factory:block/pocket_factory_entrance"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 7],
+      "to": [16, 16, 9],
+      "faces": {
+        "down": { "texture": "#portal" },
+        "up": { "texture": "#portal" },
+        "north": { "texture": "#portal" },
+        "south": { "texture": "#portal" },
+        "west": { "texture": "#portal" },
+        "east": { "texture": "#portal" }
+      }
+    }
+  ]
+}

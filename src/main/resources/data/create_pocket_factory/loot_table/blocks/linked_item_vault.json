@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "bonus_rolls": 0.0,
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "create_pocket_factory:linked_item_vault"
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "create_pocket_factory:blocks/linked_item_vault"
+}

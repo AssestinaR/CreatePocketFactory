@@ -1,0 +1,80 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version "${moddevgradle_version}"
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = neo_version
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+repositories {
+    maven {
+        name = 'Aliyun Maven Public'
+        url = 'https://maven.aliyun.com/repository/public'
+    }
+    maven {
+        name = 'Aliyun Central'
+        url = 'https://maven.aliyun.com/repository/central'
+    }
+    mavenCentral()
+}
+
+dependencies {
+    def createRuntimeDeps = files(
+            'docs/[机械动力] create-1.21.1-6.0.10.jar',
+            'docs/[机械动力] create-1.21.1-6.0.10/META-INF/jarjar/flywheel-neoforge-1.21.1-1.0.6.jar',
+            'docs/[机械动力] create-1.21.1-6.0.10/META-INF/jarjar/ponder-neoforge-1.0.82+mc1.21.1.jar',
+            'docs/[机械动力] create-1.21.1-6.0.10/META-INF/jarjar/Registrate-MC1.21-1.3.0+67.jar'
+    )
+
+    compileOnly createRuntimeDeps
+    runtimeOnly createRuntimeDeps
+}
+
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [
+        minecraft_version: minecraft_version,
+        neo_version      : neo_version,
+        mod_id           : mod_id,
+        mod_name         : mod_name,
+        mod_version      : mod_version,
+        mod_authors      : mod_authors,
+        mod_description  : mod_description
+    ]
+
+    inputs.properties(replaceProperties)
+    filesMatching(['META-INF/neoforge.mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

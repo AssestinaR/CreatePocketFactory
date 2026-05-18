@@ -1,0 +1,40 @@
+# IDE and local editor state
+.vscode/
+.idea/
+*.iml
+
+# Gradle caches and generated outputs
+.gradle/
+build/
+bin/
+out/
+run/
+
+# Local Gradle distribution stored in workspace
+gradle-8.10.2/
+gradle-8.10.2-bin.zip
+
+# Generated mod metadata and extracted release artifacts
+*_data/
+*_META-INF/
+moddevgradle_metadata.xml
+moddev_meta.xml
+neoforge_metadata.xml
+userdev_plugin.xml
+
+# External references / research material not part of project source
+docs/
+docs_index.html
+iris-research/
+
+# Logs and temporary files
+*.log
+hs_err_pid*
+replay_pid*
+
+# OS junk
+Thumbs.db
+Desktop.ini
+
+# Personal scratch files
+新建 文本文档.txt
