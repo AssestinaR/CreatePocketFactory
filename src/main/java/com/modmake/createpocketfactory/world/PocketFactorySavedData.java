@@ -96,15 +96,6 @@ public final class PocketFactorySavedData extends SavedData {
             }
         }
 
-        ListTag pumpChannelsTag = tag.getList("PumpChannels", Tag.TAG_COMPOUND);
-        for (Tag entry : pumpChannelsTag) {
-            CompoundTag channelTag = (CompoundTag) entry;
-            int bindingId = channelTag.getInt("BindingId");
-            if (bindingId > 0) {
-                data.pumpChannels.put(bindingId, PumpBridgeState.load(channelTag, registries));
-            }
-        }
-
         data.bootstrapLegacyBindings();
     data.rebuildEndpointIndex();
 
@@ -158,11 +149,6 @@ public final class PocketFactorySavedData extends SavedData {
         }
         tag.put("ChuteChannels", chuteChannelsTag);
 
-        ListTag pumpChannelsTag = new ListTag();
-        for (Map.Entry<Integer, PumpBridgeState> entry : pumpChannels.entrySet()) {
-            pumpChannelsTag.add(entry.getValue().save(entry.getKey(), registries));
-        }
-        tag.put("PumpChannels", pumpChannelsTag);
         return tag;
     }
 

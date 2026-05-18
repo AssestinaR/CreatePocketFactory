@@ -3,7 +3,10 @@ package com.modmake.createpocketfactory.block.entity;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -34,6 +37,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -50,10 +54,14 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
     private static final int MIN_TRANSFER_PER_TICK = 25;
     private static final int MAX_TRANSFER_PER_TICK = 1000;
     private static final int BRIDGE_BUFFER_CAPACITY = 4000;
+    private static final int ENDPOINT_CACHE_TTL = 10;
 
     private int bindingId = -1;
     private int factoryId = -1;
     private boolean internalEndpoint;
+    private boolean pendingRuntimeRefresh = true;
+    private final EnumMap<Direction, CachedEndpointScan> cachedEndpointScans = new EnumMap<>(Direction.class);
+
     public LinkedPumpBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
     }
@@ -87,6 +95,7 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
         factoryId = compound.contains(FACTORY_ID_TAG) ? compound.getInt(FACTORY_ID_TAG) : -1;
         internalEndpoint = compound.getBoolean(INTERNAL_ENDPOINT_TAG);
         super.read(compound, registries, clientPacket);
+        requestRuntimeRefresh();
     }
 
     @Override
@@ -98,6 +107,12 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
         }
 
         bridgeLinkedTransfer(serverLevel);
+    }
+
+    @Override
+    public void invalidate() {
+        cachedEndpointScans.clear();
+        super.invalidate();
     }
 
     @Override
@@ -129,8 +144,20 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
         if (!changed) {
             return;
         }
+        requestRuntimeRefresh();
         setChanged();
         sendData();
+    }
+
+    private void requestRuntimeRefresh() {
+        cachedEndpointScans.clear();
+        pendingRuntimeRefresh = true;
+    }
+
+    private boolean consumeRuntimeRefreshRequest() {
+        boolean requested = pendingRuntimeRefresh;
+        pendingRuntimeRefresh = false;
+        return requested;
     }
 
     private void bridgeLinkedTransfer(ServerLevel serverLevel) {
@@ -146,11 +173,15 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
         FluidStack buffered = savedData.peekPumpBridgeFluid(bindingId);
         String sourceEndpointKey = savedData.getPumpBridgeSourceEndpointKey(bindingId);
 
-        List<ResolvedFluidEndpoint> localSources = collectTransferEndpoints(serverLevel, worldPosition, localPullSide);
-        List<ResolvedFluidEndpoint> localTargets = collectTransferEndpoints(serverLevel, worldPosition, localPushSide);
+        boolean canDeliverBuffered = !buffered.isEmpty()
+            && sourceEndpointKey != null
+            && !sourceEndpointKey.equals(localEndpointKey);
+        List<ResolvedFluidEndpoint> localTargets = canDeliverBuffered
+            ? collectTransferEndpoints(serverLevel, worldPosition, localPushSide)
+            : List.of();
 
         boolean transferred = false;
-        if (!buffered.isEmpty() && sourceEndpointKey != null && !sourceEndpointKey.equals(localEndpointKey) && !localTargets.isEmpty()) {
+        if (canDeliverBuffered && !localTargets.isEmpty()) {
             FluidStack toInsert = buffered.copy();
             toInsert.setAmount(Math.min(toInsert.getAmount(), getMaxTransferPerTick()));
             int filled = executeFill(localTargets, toInsert);
@@ -164,7 +195,12 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
         boolean canSourceIntoBridge = remainingCapacity > 0
                 && (sourceEndpointKey == null || sourceEndpointKey.equals(localEndpointKey) || buffered.isEmpty());
 
-        if (canSourceIntoBridge && !localSources.isEmpty()) {
+        if (canSourceIntoBridge) {
+            List<ResolvedFluidEndpoint> localSources = collectTransferEndpoints(serverLevel, worldPosition, localPullSide);
+            if (localSources.isEmpty()) {
+                return;
+            }
+
             int maxTransfer = Math.min(getMaxTransferPerTick(), remainingCapacity);
             for (ResolvedFluidEndpoint source : localSources) {
                 FluidStack simulated = source.handler().drain(maxTransfer, FluidAction.SIMULATE);
@@ -218,12 +254,33 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
     }
 
     private List<ResolvedFluidEndpoint> collectTransferEndpoints(ServerLevel level, BlockPos pumpPos, Direction side) {
-        List<ResolvedFluidEndpoint> endpoints = new ArrayList<>();
+        long gameTime = level.getGameTime();
+        CachedEndpointScan cachedScan = cachedEndpointScans.get(side);
+        if (cachedScan == null || !isEndpointScanValid(level, cachedScan)) {
+            cachedScan = new CachedEndpointScan(gameTime + ENDPOINT_CACHE_TTL, scanTransferEndpoints(level, pumpPos, side));
+            cachedEndpointScans.put(side, cachedScan);
+        } else if (cachedScan.expiresAt() <= gameTime) {
+            cachedScan = cachedScan.withExpiry(gameTime + ENDPOINT_CACHE_TTL);
+            cachedEndpointScans.put(side, cachedScan);
+        }
+
+        List<ResolvedFluidEndpoint> endpoints = new ArrayList<>(cachedScan.references().size());
+        for (EndpointReference reference : cachedScan.references()) {
+            resolveEndpointReference(level, reference, endpoints);
+        }
+        return endpoints;
+    }
+
+    private EndpointScanSnapshot scanTransferEndpoints(ServerLevel level, BlockPos pumpPos, Direction side) {
+        Set<EndpointReference> endpoints = new LinkedHashSet<>();
+        Set<BlockPos> watchedPositions = new LinkedHashSet<>();
         Set<BlockPos> visited = new HashSet<>();
         ArrayDeque<BlockPos> frontier = new ArrayDeque<>();
 
-        collectEndpointAtFace(level, new BlockFace(pumpPos, side), endpoints);
+        watchedPositions.add(pumpPos);
+        collectEndpointReferenceAtFace(level, new BlockFace(pumpPos, side), endpoints);
         BlockPos adjacentPos = pumpPos.relative(side);
+        watchedPositions.add(adjacentPos);
         BlockState adjacentState = level.getBlockState(adjacentPos);
         FluidTransportBehaviour adjacentPipe = FluidPropagator.getPipe(level, adjacentPos);
         if (adjacentPipe != null && adjacentPipe.canHaveFlowToward(adjacentState, side.getOpposite())) {
@@ -236,6 +293,7 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
                 continue;
             }
 
+            watchedPositions.add(currentPos);
             BlockState currentState = level.getBlockState(currentPos);
             FluidTransportBehaviour pipe = FluidPropagator.getPipe(level, currentPos);
             if (pipe == null) {
@@ -244,9 +302,10 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
 
             for (Direction face : FluidPropagator.getPipeConnections(currentState, pipe)) {
                 BlockFace blockFace = new BlockFace(currentPos, face);
-                collectEndpointAtFace(level, blockFace, endpoints);
+                collectEndpointReferenceAtFace(level, blockFace, endpoints);
 
                 BlockPos connectedPos = blockFace.getConnectedPos();
+                watchedPositions.add(connectedPos);
                 if (visited.contains(connectedPos) || !level.isLoaded(connectedPos)) {
                     continue;
                 }
@@ -259,22 +318,62 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
             }
         }
 
-        return endpoints;
+        List<WatchedBlockState> watchedStates = new ArrayList<>(watchedPositions.size());
+        for (BlockPos watchedPos : watchedPositions) {
+            watchedStates.add(new WatchedBlockState(watchedPos, Block.getId(level.getBlockState(watchedPos))));
+        }
+
+        return new EndpointScanSnapshot(new ArrayList<>(endpoints), watchedStates);
     }
 
-    private void collectEndpointAtFace(ServerLevel level, BlockFace blockFace, List<ResolvedFluidEndpoint> endpoints) {
+    private boolean isEndpointScanValid(ServerLevel level, CachedEndpointScan cachedScan) {
+        for (WatchedBlockState watchedState : cachedScan.watchedStates()) {
+            if (!level.isLoaded(watchedState.pos())) {
+                return false;
+            }
+            if (Block.getId(level.getBlockState(watchedState.pos())) != watchedState.stateId()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void collectEndpointReferenceAtFace(ServerLevel level, BlockFace blockFace, Set<EndpointReference> endpoints) {
         BlockPos connectedPos = blockFace.getConnectedPos();
         Direction face = blockFace.getFace();
         BlockEntity blockEntity = level.getBlockEntity(connectedPos);
         if (blockEntity != null) {
             IFluidHandler capability = level.getCapability(Capabilities.FluidHandler.BLOCK, connectedPos, face.getOpposite());
             if (capability != null) {
-                endpoints.add(new ResolvedFluidEndpoint(capability, connectedPos, "handler"));
+                endpoints.add(new EndpointReference(blockFace.getPos(), face, "handler"));
                 return;
             }
         }
 
         if (!FluidPropagator.isOpenEnd(level, blockFace.getPos(), face)) {
+            return;
+        }
+
+        endpoints.add(new EndpointReference(blockFace.getPos(), face, "open_end"));
+    }
+
+    private void resolveEndpointReference(ServerLevel level, EndpointReference reference, List<ResolvedFluidEndpoint> endpoints) {
+        BlockFace blockFace = new BlockFace(reference.pipePos(), reference.face());
+        BlockPos connectedPos = blockFace.getConnectedPos();
+        Direction face = blockFace.getFace();
+        if (!level.isLoaded(connectedPos)) {
+            return;
+        }
+
+        if ("handler".equals(reference.kind())) {
+            IFluidHandler capability = level.getCapability(Capabilities.FluidHandler.BLOCK, connectedPos, face.getOpposite());
+            if (capability != null) {
+                endpoints.add(new ResolvedFluidEndpoint(capability, connectedPos, reference.kind()));
+            }
+            return;
+        }
+
+        if (!FluidPropagator.isOpenEnd(level, reference.pipePos(), face)) {
             return;
         }
 
@@ -359,7 +458,26 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
     public record RemoteSourceSpec(ServerLevel level, BlockPos pos, Direction pullSide, Direction pushSide) {
     }
 
+    private record EndpointReference(BlockPos pipePos, Direction face, String kind) {
+    }
+
     private record ResolvedFluidEndpoint(IFluidHandler handler, BlockPos pos, String kind) {
+    }
+
+    private record WatchedBlockState(BlockPos pos, int stateId) {
+    }
+
+    private record EndpointScanSnapshot(List<EndpointReference> references, List<WatchedBlockState> watchedStates) {
+    }
+
+    private record CachedEndpointScan(long expiresAt, List<EndpointReference> references, List<WatchedBlockState> watchedStates) {
+        private CachedEndpointScan(long expiresAt, EndpointScanSnapshot snapshot) {
+            this(expiresAt, snapshot.references(), snapshot.watchedStates());
+        }
+
+        private CachedEndpointScan withExpiry(long newExpiresAt) {
+            return new CachedEndpointScan(newExpiresAt, references, watchedStates);
+        }
     }
 
     private record RemotePumpResolution(@Nullable RemotePumpContext context, String stage) {
@@ -380,15 +498,45 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
             this.linkedPump = blockEntity;
         }
 
-        private void ensureLinkedConnections() {
+        private boolean refreshLinkedConnections() {
             Direction pullSide = linkedPump.getPullSide();
-            if (interfaces == null || pullSide == null) {
-                return;
+            boolean refreshRequested = linkedPump.consumeRuntimeRefreshRequest();
+            if (interfaces == null) {
+                return false;
             }
-            PipeConnection connection = interfaces.get(pullSide);
-            if (!(connection instanceof LinkedPumpSourceConnection)) {
-                interfaces.put(pullSide, new LinkedPumpSourceConnection(linkedPump, pullSide));
+
+            boolean changed = false;
+            Iterator<Entry<Direction, PipeConnection>> iterator = interfaces.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Entry<Direction, PipeConnection> entry = iterator.next();
+                Direction side = entry.getKey();
+                PipeConnection connection = entry.getValue();
+                if (!linkedPump.isSideAccessible(side)) {
+                    iterator.remove();
+                    changed = true;
+                    continue;
+                }
+                if (connection instanceof LinkedPumpSourceConnection && side != pullSide) {
+                    iterator.remove();
+                    changed = true;
+                }
             }
+
+            if (pullSide != null) {
+                PipeConnection connection = interfaces.get(pullSide);
+                if (!(connection instanceof LinkedPumpSourceConnection) || refreshRequested) {
+                    interfaces.put(pullSide, new LinkedPumpSourceConnection(linkedPump, pullSide));
+                    changed = true;
+                }
+            }
+
+            if (changed || refreshRequested) {
+                phase = UpdatePhase.WAIT_FOR_PUMPS;
+                blockEntity.notifyUpdate();
+                return true;
+            }
+
+            return false;
         }
 
         @Override
@@ -400,7 +548,7 @@ public class LinkedPumpBlockEntity extends PumpBlockEntity implements IHaveGoggl
             if (interfaces == null) {
                 return;
             }
-            ensureLinkedConnections();
+            refreshLinkedConnections();
 
             Collection<PipeConnection> connections = interfaces.values();
             PipeConnection singleSource = null;

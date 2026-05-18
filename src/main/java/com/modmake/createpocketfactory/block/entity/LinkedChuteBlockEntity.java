@@ -6,6 +6,7 @@ import com.simibubi.create.content.kinetics.fan.EncasedFanBlock;
 import com.simibubi.create.content.kinetics.fan.EncasedFanBlockEntity;
 import com.simibubi.create.content.logistics.chute.AbstractChuteBlock;
 import com.simibubi.create.content.logistics.chute.ChuteBlockEntity;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedList;
 import java.lang.reflect.Field;
@@ -23,6 +24,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -36,6 +38,7 @@ public final class LinkedChuteBlockEntity extends ChuteBlockEntity implements IH
     private static final String INTERNAL_ENDPOINT_TAG = "InternalEndpoint";
     private static final String RECEIVED_TRANSFER_IN_FLIGHT_TAG = "ReceivedTransferInFlight";
     private static final float OUTPUT_GATE = 0.5f;
+    private static final int TOPOLOGY_CACHE_TTL = 10;
     private static final Field ITEM_POSITION_FIELD = resolveItemPositionField();
     private static final Field PULL_FIELD = resolveChuteField("pull");
     private static final Field PUSH_FIELD = resolveChuteField("push");
@@ -47,6 +50,8 @@ public final class LinkedChuteBlockEntity extends ChuteBlockEntity implements IH
     private boolean receivedTransferInFlight;
     private float localPullSource;
     private float localPushSource;
+    private @Nullable CachedLocalTopology cachedLocalTopology;
+    private @Nullable CachedOppositeEndpoint cachedOppositeEndpoint;
 
     public LinkedChuteBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.LINKED_CHUTE.get(), pos, state);
@@ -80,6 +85,7 @@ public final class LinkedChuteBlockEntity extends ChuteBlockEntity implements IH
         if (!changed) {
             return;
         }
+        invalidateCaches();
         setChanged();
         if (level != null && !level.isClientSide) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
@@ -128,6 +134,12 @@ public final class LinkedChuteBlockEntity extends ChuteBlockEntity implements IH
         }
 
         super.tick();
+    }
+
+    @Override
+    public void invalidate() {
+        invalidateCaches();
+        super.invalidate();
     }
 
     @Override
@@ -335,27 +347,35 @@ public final class LinkedChuteBlockEntity extends ChuteBlockEntity implements IH
     }
 
     private @Nullable LinkedChuteBlockEntity resolveOppositeEndpoint(PocketFactorySavedData savedData, String endpointKey) {
-        String oppositeEndpointKey = resolveOppositeEndpointKey(savedData, endpointKey);
-        if (oppositeEndpointKey == null || level == null || level.getServer() == null) {
+        CachedOppositeEndpoint cached = getCachedOppositeEndpoint(savedData, endpointKey);
+        if (cached == null || level == null || level.getServer() == null) {
             return null;
         }
 
-        LinkedStorageBindingHelper.EndpointLocation endpointLocation = LinkedStorageBindingHelper.parseEndpointKey(oppositeEndpointKey);
-        if (endpointLocation == null) {
-            return null;
-        }
-
-        ServerLevel targetLevel = level.getServer().getLevel(endpointLocation.dimension());
+        ServerLevel targetLevel = level.getServer().getLevel(cached.location().dimension());
         if (targetLevel == null) {
             return null;
         }
 
-        return targetLevel.getBlockEntity(endpointLocation.pos()) instanceof LinkedChuteBlockEntity opposite && !opposite.isRemoved()
+        return targetLevel.getBlockEntity(cached.location().pos()) instanceof LinkedChuteBlockEntity opposite && !opposite.isRemoved()
                 ? opposite
                 : null;
     }
 
     private @Nullable ChuteBlockEntity getLocalTargetChute() {
+        CachedLocalTopology topology = getCachedLocalTopology();
+        if (topology == null || topology.targetPos() == null || level == null) {
+            return null;
+        }
+
+        BlockPos chutePos = topology.targetPos();
+        if (!(level.getBlockEntity(chutePos) instanceof ChuteBlockEntity targetChute) || targetChute.isRemoved()) {
+            return null;
+        }
+        return targetChute;
+    }
+
+    private @Nullable BlockPos findLocalTargetChutePos() {
         if (level == null) {
             return null;
         }
@@ -370,21 +390,35 @@ public final class LinkedChuteBlockEntity extends ChuteBlockEntity implements IH
             chutePos = chutePos.relative(targetDirection.getOpposite());
         }
 
-        if (!(level.getBlockEntity(chutePos) instanceof ChuteBlockEntity targetChute) || targetChute.isRemoved()) {
-            return null;
-        }
-        return targetChute;
+        return chutePos;
     }
 
     private List<ChuteBlockEntity> getLocalInputChutes() {
-        List<ChuteBlockEntity> inputs = new LinkedList<>();
-        for (Direction direction : Iterate.directions) {
-            ChuteBlockEntity inputChute = getLocalInputChute(direction);
-            if (inputChute != null) {
+        CachedLocalTopology topology = getCachedLocalTopology();
+        List<ChuteBlockEntity> inputs = new ArrayList<>();
+        if (topology == null || level == null) {
+            return inputs;
+        }
+
+        for (BlockPos inputPos : topology.inputPositions()) {
+            if (level.getBlockEntity(inputPos) instanceof ChuteBlockEntity inputChute && !inputChute.isRemoved()) {
                 inputs.add(inputChute);
             }
         }
         return inputs;
+    }
+
+    private List<BlockPos> findLocalInputChutePositions() {
+        List<ChuteBlockEntity> inputs = new LinkedList<>();
+        List<BlockPos> positions = new ArrayList<>();
+        for (Direction direction : Iterate.directions) {
+            ChuteBlockEntity inputChute = getLocalInputChute(direction);
+            if (inputChute != null) {
+                inputs.add(inputChute);
+                positions.add(inputChute.getBlockPos());
+            }
+        }
+        return positions;
     }
 
     private @Nullable ChuteBlockEntity getLocalInputChute(Direction direction) {
@@ -443,6 +477,79 @@ public final class LinkedChuteBlockEntity extends ChuteBlockEntity implements IH
             return null;
         }
         return BindingEndpointHelper.resolveOppositeEndpointKey(endpoints, endpointKey);
+    }
+
+    private @Nullable CachedLocalTopology getCachedLocalTopology() {
+        if (level == null) {
+            return null;
+        }
+
+        long gameTime = level.getGameTime();
+        if (cachedLocalTopology == null || !isLocalTopologyValid(cachedLocalTopology)) {
+            cachedLocalTopology = buildLocalTopologyCache(gameTime + TOPOLOGY_CACHE_TTL);
+        } else if (cachedLocalTopology.expiresAt() <= gameTime) {
+            cachedLocalTopology = cachedLocalTopology.withExpiry(gameTime + TOPOLOGY_CACHE_TTL);
+        }
+        return cachedLocalTopology;
+    }
+
+    private CachedLocalTopology buildLocalTopologyCache(long expiresAt) {
+        List<WatchedBlockState> watchedStates = new ArrayList<>();
+        BlockPos targetPos = findLocalTargetChutePos();
+        if (targetPos != null && level != null) {
+            watchedStates.add(new WatchedBlockState(targetPos, Block.getId(level.getBlockState(targetPos))));
+        }
+
+        List<BlockPos> inputPositions = findLocalInputChutePositions();
+        if (level != null) {
+            for (BlockPos inputPos : inputPositions) {
+                watchedStates.add(new WatchedBlockState(inputPos, Block.getId(level.getBlockState(inputPos))));
+            }
+        }
+
+        return new CachedLocalTopology(expiresAt, targetPos, inputPositions, watchedStates);
+    }
+
+    private boolean isLocalTopologyValid(CachedLocalTopology topology) {
+        if (level == null) {
+            return false;
+        }
+        for (WatchedBlockState watchedState : topology.watchedStates()) {
+            if (!level.isLoaded(watchedState.pos())) {
+                return false;
+            }
+            if (Block.getId(level.getBlockState(watchedState.pos())) != watchedState.stateId()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private @Nullable CachedOppositeEndpoint getCachedOppositeEndpoint(PocketFactorySavedData savedData, String endpointKey) {
+        if (level == null || level.getServer() == null) {
+            return null;
+        }
+
+        long gameTime = level.getGameTime();
+        if (cachedOppositeEndpoint == null
+                || !endpointKey.equals(cachedOppositeEndpoint.endpointKey())
+                || cachedOppositeEndpoint.expiresAt() <= gameTime) {
+            String oppositeEndpointKey = resolveOppositeEndpointKey(savedData, endpointKey);
+            LinkedStorageBindingHelper.EndpointLocation location = oppositeEndpointKey == null
+                    ? null
+                    : LinkedStorageBindingHelper.parseEndpointKey(oppositeEndpointKey);
+            if (location == null) {
+                cachedOppositeEndpoint = null;
+                return null;
+            }
+            cachedOppositeEndpoint = new CachedOppositeEndpoint(gameTime + TOPOLOGY_CACHE_TTL, endpointKey, location);
+        }
+        return cachedOppositeEndpoint;
+    }
+
+    private void invalidateCaches() {
+        cachedLocalTopology = null;
+        cachedOppositeEndpoint = null;
     }
 
     private float getTrackedItemPosition() {
@@ -521,5 +628,19 @@ public final class LinkedChuteBlockEntity extends ChuteBlockEntity implements IH
         } catch (IllegalAccessException exception) {
             throw new IllegalStateException("Unable to update chute airflow flag", exception);
         }
+    }
+
+    private record WatchedBlockState(BlockPos pos, int stateId) {
+    }
+
+    private record CachedLocalTopology(long expiresAt, @Nullable BlockPos targetPos, List<BlockPos> inputPositions,
+                                       List<WatchedBlockState> watchedStates) {
+        private CachedLocalTopology withExpiry(long newExpiresAt) {
+            return new CachedLocalTopology(newExpiresAt, targetPos, inputPositions, watchedStates);
+        }
+    }
+
+    private record CachedOppositeEndpoint(long expiresAt, String endpointKey,
+                                          LinkedStorageBindingHelper.EndpointLocation location) {
     }
 }
