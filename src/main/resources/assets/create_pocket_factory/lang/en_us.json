@@ -33,8 +33,6 @@
   "goggles.create_pocket_factory.common.more_types": "... and %s more item types",
   "tooltip.create_pocket_factory.pocket_factory_entrance.factory_id": "Bound Factory ID: %s",
   "tooltip.create_pocket_factory.pocket_factory_entrance.unbound": "Unbound factory: one will be assigned after placement.",
-  "tooltip.create_pocket_factory.pocket_factory_portal.factory_id": "Bound Factory ID: %s",
-  "tooltip.create_pocket_factory.pocket_factory_portal.unbound": "Unbound factory: select it with the core, then click an entrance to finish linking.",
   "tooltip.create_pocket_factory.linked_chute.factory_id": "Bound Factory ID: %s",
   "tooltip.create_pocket_factory.linked_chute.unbound": "Unbound factory: this will become a linked chute endpoint in phase 6.",
   "tooltip.create_pocket_factory.pocket_factory_eye.menu": "Right-click to open a portable Pocket Factory panel.",

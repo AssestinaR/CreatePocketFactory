@@ -1,14 +1,12 @@
 package com.modmake.createpocketfactory.block;
 
 import com.modmake.createpocketfactory.block.entity.PocketFactoryPortalBlockEntity;
-import com.modmake.createpocketfactory.item.PocketFactoryPortalBlockItem;
 import com.modmake.createpocketfactory.world.PocketFactoryDimensions;
 import com.modmake.createpocketfactory.world.PocketFactorySavedData;
 import com.mojang.serialization.MapCodec;
 import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -21,7 +19,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.loot.LootParams;
-import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 
 public final class PocketFactoryPortalBlock extends BaseEntityBlock {
     public static final MapCodec<PocketFactoryPortalBlock> CODEC = simpleCodec(PocketFactoryPortalBlock::new);
@@ -69,13 +66,6 @@ public final class PocketFactoryPortalBlock extends BaseEntityBlock {
                 blockEntity.setBinding(factory.id(), true);
                 savedData.registerPortalEndpoint(factory.id(), PocketFactorySavedData.PortalEndpoint.INTERNAL, level.dimension(), pos);
             }
-            return;
-        }
-
-        java.util.OptionalInt factoryId = PocketFactoryPortalBlockItem.getFactoryId(stack);
-        if (factoryId.isPresent() && savedData.getFactory(factoryId.getAsInt()) != null) {
-            blockEntity.setBinding(factoryId.getAsInt(), false);
-            savedData.registerPortalEndpoint(factoryId.getAsInt(), PocketFactorySavedData.PortalEndpoint.EXTERNAL, level.dimension(), pos);
         }
     }
 
@@ -98,12 +88,7 @@ public final class PocketFactoryPortalBlock extends BaseEntityBlock {
 
     @Override
     protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
-        BlockEntity blockEntity = params.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
-        if (blockEntity instanceof PocketFactoryPortalBlockEntity portalBlockEntity && portalBlockEntity.hasFactoryId()) {
-            return List.of(PocketFactoryPortalBlockItem.createBoundStack(this, portalBlockEntity.getFactoryId()));
-        }
-
-        return super.getDrops(state, params);
+        return List.of();
     }
 
     @Override

@@ -15,6 +15,7 @@ import com.modmake.createpocketfactory.block.entity.BindingEndpointHelper;
 import com.modmake.createpocketfactory.block.entity.LinkedStorageBindingHelper;
 import com.modmake.createpocketfactory.block.entity.PocketFactoryPortalBlockEntity;
 import com.modmake.createpocketfactory.block.entity.PocketFactoryEntranceBlockEntity;
+import com.modmake.createpocketfactory.config.ModConfigs;
 import com.modmake.createpocketfactory.world.LinkedStorageManualBindingHelper;
 import com.modmake.createpocketfactory.world.PocketFactoryDimensions;
 import com.modmake.createpocketfactory.world.PocketFactorySavedData;
@@ -126,9 +127,13 @@ public final class PocketFactoryCoreItem extends Item {
 
         SelectedEndpoint endpoint = getSelectedEndpoint(stack);
         if (endpoint != null) {
-            tooltipComponents.add(Component.translatable(endpoint.kind().tooltipKey()).withStyle(SELECTION_TOOLTIP_STYLE));
-            tooltipComponents.add(Component.literal(endpoint.pos().getX() + ", " + endpoint.pos().getY() + ", " + endpoint.pos().getZ())
-                    .withStyle(SELECTION_TOOLTIP_STYLE));
+            SelectedEndpointTooltipHelper.appendSelectedEndpointTooltip(
+                    tooltipComponents,
+                    Component.translatable(endpoint.kind().tooltipKey()),
+                    endpoint.dimension(),
+                    endpoint.pos(),
+                    SELECTION_TOOLTIP_STYLE
+            );
         }
     }
 
@@ -168,13 +173,7 @@ public final class PocketFactoryCoreItem extends Item {
             return InteractionResult.FAIL;
         }
 
-        boolean pendingInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(pendingEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(level.dimension());
-        if (pendingInsidePocket == currentInsidePocket) {
-            notifyPlayer(player, "Select one storage inside a pocket factory and one storage outside it.");
-            return InteractionResult.FAIL;
-        }
-
+        boolean pendingInsidePocket = isInsidePocket(pendingEndpoint.dimension());
         ServerLevel internalLevel = pendingInsidePocket ? pendingLevel : level;
         BlockPos internalPos = pendingInsidePocket ? pendingEndpoint.pos() : origin;
         ServerLevel externalLevel = pendingInsidePocket ? level : pendingLevel;
@@ -186,17 +185,14 @@ public final class PocketFactoryCoreItem extends Item {
             notifyPlayer(player, validation.message());
             return InteractionResult.FAIL;
         }
-        PocketFactorySavedData.FactoryRecord factory = validation.factory();
-        if (factory == null) {
-            notifyPlayer(player, "No pocket factory found for the selected internal storage.");
-            return InteractionResult.FAIL;
-        }
+        BindingContext bindingContext = validation.bindingContext();
 
-        int bindingId = savedData.createBinding(factory.id(), kind.bindingChannel());
+        int bindingId = savedData.createBinding(bindingContext.factoryId(), kind.bindingChannel());
         LinkedStorageBindingHelper.BindingTarget internalTarget = new LinkedStorageBindingHelper.BindingTarget(
                 bindingId,
-                factory.id(),
-                PocketFactoryDimensions.getChunkOffsetAt(factory, internalPos)
+            bindingContext.factoryId(),
+            bindingContext.factory() == null ? null : PocketFactoryDimensions.getChunkOffsetAt(bindingContext.factory(), internalPos),
+            true
         );
         if (!LinkedStorageManualBindingHelper.bind(internalLevel, internalPos, kind, internalTarget)) {
             clearPendingEndpoint(stack);
@@ -204,7 +200,12 @@ public final class PocketFactoryCoreItem extends Item {
             return InteractionResult.FAIL;
         }
 
-        LinkedStorageBindingHelper.BindingTarget externalTarget = new LinkedStorageBindingHelper.BindingTarget(bindingId, factory.id(), null);
+        LinkedStorageBindingHelper.BindingTarget externalTarget = new LinkedStorageBindingHelper.BindingTarget(
+            bindingId,
+            bindingContext.factoryId(),
+            null,
+            false
+        );
         if (!LinkedStorageManualBindingHelper.bind(externalLevel, externalPos, kind, externalTarget)) {
             rollbackDirectStorageBinding(internalLevel, internalPos, kind, bindingId, level.registryAccess());
             clearPendingEndpoint(stack);
@@ -426,11 +427,7 @@ public final class PocketFactoryCoreItem extends Item {
             return InteractionResult.FAIL;
         }
 
-        PocketFactorySavedData.FactoryRecord factory = validation.factory();
-        if (factory == null) {
-            notifyPlayer(player, "No pocket factory found for the selected internal pump.");
-            return InteractionResult.FAIL;
-        }
+        BindingContext bindingContext = validation.bindingContext();
 
         ServerLevel pendingLevel = level.getServer().getLevel(pendingEndpoint.dimension());
         if (pendingLevel == null) {
@@ -446,14 +443,14 @@ public final class PocketFactoryCoreItem extends Item {
         BlockPos externalPos = pendingInsidePocket ? origin : pendingEndpoint.pos();
 
         PocketFactorySavedData savedData = PocketFactorySavedData.get(level.getServer());
-        int bindingId = savedData.createBinding(factory.id(), PocketFactorySavedData.BindingChannel.LINKED_PUMP);
-        if (!bindPumpEndpoint(internalLevel, internalPos, bindingId, factory.id(), true)) {
+        int bindingId = savedData.createBinding(bindingContext.factoryId(), PocketFactorySavedData.BindingChannel.LINKED_PUMP);
+        if (!bindPumpEndpoint(internalLevel, internalPos, bindingId, bindingContext.factoryId(), true)) {
             clearPendingEndpoint(stack);
             notifyPlayer(player, "Binding failed while linking the internal pump.");
             return InteractionResult.FAIL;
         }
 
-        if (!bindPumpEndpoint(externalLevel, externalPos, bindingId, factory.id(), false)) {
+        if (!bindPumpEndpoint(externalLevel, externalPos, bindingId, bindingContext.factoryId(), false)) {
             rollbackDirectPumpBinding(internalLevel, internalPos, bindingId);
             clearPendingEndpoint(stack);
             notifyPlayer(player, "Binding failed while linking the second pump. The first pump was rolled back.");
@@ -473,11 +470,7 @@ public final class PocketFactoryCoreItem extends Item {
             return InteractionResult.FAIL;
         }
 
-        PocketFactorySavedData.FactoryRecord factory = validation.factory();
-        if (factory == null) {
-            notifyPlayer(player, "No pocket factory found for the selected internal clutch.");
-            return InteractionResult.FAIL;
-        }
+        BindingContext bindingContext = validation.bindingContext();
 
         ServerLevel pendingLevel = level.getServer().getLevel(pendingEndpoint.dimension());
         if (pendingLevel == null) {
@@ -493,14 +486,14 @@ public final class PocketFactoryCoreItem extends Item {
         BlockPos externalPos = pendingInsidePocket ? origin : pendingEndpoint.pos();
 
         PocketFactorySavedData savedData = PocketFactorySavedData.get(level.getServer());
-        int bindingId = savedData.createBinding(factory.id(), PocketFactorySavedData.BindingChannel.LINKED_CLUTCH);
-        if (!bindClutchEndpoint(internalLevel, internalPos, bindingId, factory.id(), true)) {
+        int bindingId = savedData.createBinding(bindingContext.factoryId(), PocketFactorySavedData.BindingChannel.LINKED_CLUTCH);
+        if (!bindClutchEndpoint(internalLevel, internalPos, bindingId, bindingContext.factoryId(), true)) {
             clearPendingEndpoint(stack);
             notifyPlayer(player, "Binding failed while linking the internal clutch.");
             return InteractionResult.FAIL;
         }
 
-        if (!bindClutchEndpoint(externalLevel, externalPos, bindingId, factory.id(), false)) {
+        if (!bindClutchEndpoint(externalLevel, externalPos, bindingId, bindingContext.factoryId(), false)) {
             rollbackDirectClutchBinding(internalLevel, internalPos, bindingId);
             clearPendingEndpoint(stack);
             notifyPlayer(player, "Binding failed while linking the second clutch. The first clutch was rolled back.");
@@ -520,11 +513,7 @@ public final class PocketFactoryCoreItem extends Item {
             return InteractionResult.FAIL;
         }
 
-        PocketFactorySavedData.FactoryRecord factory = validation.factory();
-        if (factory == null) {
-            notifyPlayer(player, "No pocket factory found for the selected internal chute.");
-            return InteractionResult.FAIL;
-        }
+        BindingContext bindingContext = validation.bindingContext();
 
         ServerLevel pendingLevel = level.getServer().getLevel(pendingEndpoint.dimension());
         if (pendingLevel == null) {
@@ -540,14 +529,14 @@ public final class PocketFactoryCoreItem extends Item {
         BlockPos externalPos = pendingInsidePocket ? origin : pendingEndpoint.pos();
 
         PocketFactorySavedData savedData = PocketFactorySavedData.get(level.getServer());
-        int bindingId = savedData.createBinding(factory.id(), PocketFactorySavedData.BindingChannel.LINKED_CHUTE);
-        if (!bindChuteEndpoint(internalLevel, internalPos, bindingId, factory.id(), true)) {
+        int bindingId = savedData.createBinding(bindingContext.factoryId(), PocketFactorySavedData.BindingChannel.LINKED_CHUTE);
+        if (!bindChuteEndpoint(internalLevel, internalPos, bindingId, bindingContext.factoryId(), true)) {
             clearPendingEndpoint(stack);
             notifyPlayer(player, "Binding failed while linking the internal chute.");
             return InteractionResult.FAIL;
         }
 
-        if (!bindChuteEndpoint(externalLevel, externalPos, bindingId, factory.id(), false)) {
+        if (!bindChuteEndpoint(externalLevel, externalPos, bindingId, bindingContext.factoryId(), false)) {
             rollbackDirectChuteBinding(internalLevel, internalPos, bindingId);
             clearPendingEndpoint(stack);
             notifyPlayer(player, "Binding failed while linking the second chute. The first chute was rolled back.");
@@ -681,9 +670,7 @@ public final class PocketFactoryCoreItem extends Item {
             return HoverState.BLOCKED;
         }
 
-        boolean selectedInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(selectedEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(level.dimension());
-        return selectedInsidePocket == currentInsidePocket ? HoverState.BLOCKED : HoverState.AVAILABLE;
+        return isLinkPairAllowed(level.dimension(), selectedEndpoint.dimension()) ? HoverState.AVAILABLE : HoverState.BLOCKED;
     }
 
     private static HoverState resolveChuteHoverState(Level level, BlockPos pos,
@@ -700,9 +687,7 @@ public final class PocketFactoryCoreItem extends Item {
             return HoverState.BLOCKED;
         }
 
-        boolean selectedInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(selectedEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(level.dimension());
-        return selectedInsidePocket == currentInsidePocket ? HoverState.BLOCKED : HoverState.AVAILABLE;
+        return isLinkPairAllowed(level.dimension(), selectedEndpoint.dimension()) ? HoverState.AVAILABLE : HoverState.BLOCKED;
     }
 
     private static HoverState resolvePumpHoverState(Level level, BlockPos pos,
@@ -719,9 +704,7 @@ public final class PocketFactoryCoreItem extends Item {
             return HoverState.BLOCKED;
         }
 
-        boolean selectedInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(selectedEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(level.dimension());
-        return selectedInsidePocket == currentInsidePocket ? HoverState.BLOCKED : HoverState.AVAILABLE;
+        return isLinkPairAllowed(level.dimension(), selectedEndpoint.dimension()) ? HoverState.AVAILABLE : HoverState.BLOCKED;
     }
 
     private static HoverState resolveClutchHoverState(Level level, BlockPos pos,
@@ -738,9 +721,7 @@ public final class PocketFactoryCoreItem extends Item {
             return HoverState.BLOCKED;
         }
 
-        boolean selectedInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(selectedEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(level.dimension());
-        return selectedInsidePocket == currentInsidePocket ? HoverState.BLOCKED : HoverState.AVAILABLE;
+        return isLinkPairAllowed(level.dimension(), selectedEndpoint.dimension()) ? HoverState.AVAILABLE : HoverState.BLOCKED;
     }
 
     private static StoragePairValidation validateDirectStoragePair(ServerLevel currentLevel, BlockPos currentPos,
@@ -755,21 +736,19 @@ public final class PocketFactoryCoreItem extends Item {
             return StoragePairValidation.invalid("Select another storage of the same type.");
         }
 
-        boolean pendingInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(pendingEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(currentLevel.dimension());
-        if (pendingInsidePocket == currentInsidePocket) {
-            return StoragePairValidation.invalid("Select one storage inside a pocket factory and one storage outside it.");
+        if (!isLinkPairAllowed(currentLevel.dimension(), pendingEndpoint.dimension())) {
+            return StoragePairValidation.invalid(boundaryRequirementMessage("storage"));
         }
 
+        boolean pendingInsidePocket = isInsidePocket(pendingEndpoint.dimension());
         ServerLevel internalLevel = pendingInsidePocket ? pendingLevel : currentLevel;
         BlockPos internalPos = pendingInsidePocket ? pendingEndpoint.pos() : currentPos;
         ServerLevel externalLevel = pendingInsidePocket ? currentLevel : pendingLevel;
         BlockPos externalPos = pendingInsidePocket ? currentPos : pendingEndpoint.pos();
 
-        PocketFactorySavedData savedData = PocketFactorySavedData.get(currentLevel.getServer());
-        PocketFactorySavedData.FactoryRecord factory = PocketFactoryDimensions.findFactoryAt(savedData, internalPos);
-        if (factory == null) {
-            return StoragePairValidation.invalid("No pocket factory found for the selected internal storage.");
+        BindingContext bindingContext = resolveBindingContext(currentLevel, currentPos, pendingEndpoint.dimension(), pendingEndpoint.pos());
+        if (bindingContext == null) {
+            return StoragePairValidation.invalid("The endpoint inside the pocket factory is not located in a valid factory.");
         }
 
         if (!LinkedStorageManualBindingHelper.canBindAt(internalLevel, internalPos, kind)
@@ -777,7 +756,7 @@ public final class PocketFactoryCoreItem extends Item {
             return StoragePairValidation.invalid("Binding failed. Both storages must still be empty and available.");
         }
 
-        return StoragePairValidation.valid(factory);
+        return StoragePairValidation.valid(bindingContext);
     }
 
     private static void rollbackDirectStorageBinding(ServerLevel level, BlockPos origin,
@@ -825,20 +804,16 @@ public final class PocketFactoryCoreItem extends Item {
             return ChutePairValidation.invalid("Both targets must still be normal vertical chutes.");
         }
 
-        boolean pendingInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(pendingEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(currentLevel.dimension());
-        if (pendingInsidePocket == currentInsidePocket) {
-            return ChutePairValidation.invalid("Select one chute inside a pocket factory and one chute outside it.");
+        if (!isLinkPairAllowed(currentLevel.dimension(), pendingEndpoint.dimension())) {
+            return ChutePairValidation.invalid(boundaryRequirementMessage("chute"));
         }
 
-        BlockPos internalPos = pendingInsidePocket ? pendingEndpoint.pos() : currentPos;
-        PocketFactorySavedData savedData = PocketFactorySavedData.get(currentLevel.getServer());
-        PocketFactorySavedData.FactoryRecord factory = PocketFactoryDimensions.findFactoryAt(savedData, internalPos);
-        if (factory == null) {
-            return ChutePairValidation.invalid("No pocket factory found for the selected internal chute.");
+        BindingContext bindingContext = resolveBindingContext(currentLevel, currentPos, pendingEndpoint.dimension(), pendingEndpoint.pos());
+        if (bindingContext == null) {
+            return ChutePairValidation.invalid("The endpoint inside the pocket factory is not located in a valid factory.");
         }
 
-        return ChutePairValidation.valid(factory);
+        return ChutePairValidation.valid(bindingContext);
     }
 
     private static PumpPairValidation validateDirectPumpPair(ServerLevel currentLevel, BlockPos currentPos,
@@ -857,20 +832,16 @@ public final class PocketFactoryCoreItem extends Item {
             return PumpPairValidation.invalid("Both targets must still be normal mechanical pumps.");
         }
 
-        boolean pendingInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(pendingEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(currentLevel.dimension());
-        if (pendingInsidePocket == currentInsidePocket) {
-            return PumpPairValidation.invalid("Select one pump inside a pocket factory and one pump outside it.");
+        if (!isLinkPairAllowed(currentLevel.dimension(), pendingEndpoint.dimension())) {
+            return PumpPairValidation.invalid(boundaryRequirementMessage("pump"));
         }
 
-        BlockPos internalPos = pendingInsidePocket ? pendingEndpoint.pos() : currentPos;
-        PocketFactorySavedData savedData = PocketFactorySavedData.get(currentLevel.getServer());
-        PocketFactorySavedData.FactoryRecord factory = PocketFactoryDimensions.findFactoryAt(savedData, internalPos);
-        if (factory == null) {
-            return PumpPairValidation.invalid("No pocket factory found for the selected internal pump.");
+        BindingContext bindingContext = resolveBindingContext(currentLevel, currentPos, pendingEndpoint.dimension(), pendingEndpoint.pos());
+        if (bindingContext == null) {
+            return PumpPairValidation.invalid("The endpoint inside the pocket factory is not located in a valid factory.");
         }
 
-        return PumpPairValidation.valid(factory);
+        return PumpPairValidation.valid(bindingContext);
     }
 
     private static ClutchPairValidation validateDirectClutchPair(ServerLevel currentLevel, BlockPos currentPos,
@@ -889,20 +860,54 @@ public final class PocketFactoryCoreItem extends Item {
             return ClutchPairValidation.invalid("Both targets must still be normal clutches.");
         }
 
-        boolean pendingInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(pendingEndpoint.dimension());
-        boolean currentInsidePocket = PocketFactoryDimensions.LEVEL_KEY.equals(currentLevel.dimension());
-        if (pendingInsidePocket == currentInsidePocket) {
-            return ClutchPairValidation.invalid("Select one clutch inside a pocket factory and one clutch outside it.");
+        if (!isLinkPairAllowed(currentLevel.dimension(), pendingEndpoint.dimension())) {
+            return ClutchPairValidation.invalid(boundaryRequirementMessage("clutch"));
         }
 
-        BlockPos internalPos = pendingInsidePocket ? pendingEndpoint.pos() : currentPos;
+        BindingContext bindingContext = resolveBindingContext(currentLevel, currentPos, pendingEndpoint.dimension(), pendingEndpoint.pos());
+        if (bindingContext == null) {
+            return ClutchPairValidation.invalid("The endpoint inside the pocket factory is not located in a valid factory.");
+        }
+
+        return ClutchPairValidation.valid(bindingContext);
+    }
+
+    private static boolean isLinkPairAllowed(ResourceKey<Level> currentDimension, ResourceKey<Level> selectedDimension) {
+        if (ModConfigs.requirePocketBoundaryForLinkedBindings()) {
+            return isInsidePocket(currentDimension) != isInsidePocket(selectedDimension);
+        }
+        return true;
+    }
+
+    private static boolean isInsidePocket(ResourceKey<Level> dimension) {
+        return PocketFactoryDimensions.LEVEL_KEY.equals(dimension);
+    }
+
+    private static String boundaryRequirementMessage(String endpointName) {
+        if (ModConfigs.requirePocketBoundaryForLinkedBindings()) {
+            return "Select one " + endpointName + " inside a pocket factory and one " + endpointName + " outside it.";
+        }
+        return "This link type is currently blocked by the server boundary setting.";
+    }
+
+    private static @Nullable BindingContext resolveBindingContext(ServerLevel currentLevel, BlockPos currentPos,
+                                                                 ResourceKey<Level> selectedDimension, BlockPos selectedPos) {
         PocketFactorySavedData savedData = PocketFactorySavedData.get(currentLevel.getServer());
-        PocketFactorySavedData.FactoryRecord factory = PocketFactoryDimensions.findFactoryAt(savedData, internalPos);
-        if (factory == null) {
-            return ClutchPairValidation.invalid("No pocket factory found for the selected internal clutch.");
+        if (isInsidePocket(currentLevel.dimension())) {
+            PocketFactorySavedData.FactoryRecord factory = PocketFactoryDimensions.findFactoryAt(savedData, currentPos);
+            return factory == null ? null : BindingContext.of(factory);
         }
 
-        return ClutchPairValidation.valid(factory);
+        if (!isInsidePocket(selectedDimension)) {
+            return BindingContext.unowned();
+        }
+
+        ServerLevel selectedLevel = currentLevel.getServer().getLevel(selectedDimension);
+        if (selectedLevel == null) {
+            return null;
+        }
+        PocketFactorySavedData.FactoryRecord factory = PocketFactoryDimensions.findFactoryAt(savedData, selectedPos);
+        return factory == null ? null : BindingContext.of(factory);
     }
 
     private static boolean bindChuteEndpoint(ServerLevel level, BlockPos pos, int bindingId, int factoryId, boolean internalEndpoint) {
@@ -1110,9 +1115,9 @@ public final class PocketFactoryCoreItem extends Item {
         }
     }
 
-    private record StoragePairValidation(boolean valid, @Nullable PocketFactorySavedData.FactoryRecord factory, @Nullable String message) {
-        private static StoragePairValidation valid(PocketFactorySavedData.FactoryRecord factory) {
-            return new StoragePairValidation(true, factory, null);
+    private record StoragePairValidation(boolean valid, @Nullable BindingContext bindingContext, @Nullable String message) {
+        private static StoragePairValidation valid(BindingContext bindingContext) {
+            return new StoragePairValidation(true, bindingContext, null);
         }
 
         private static StoragePairValidation invalid(String message) {
@@ -1120,9 +1125,9 @@ public final class PocketFactoryCoreItem extends Item {
         }
     }
 
-    private record ChutePairValidation(boolean valid, @Nullable PocketFactorySavedData.FactoryRecord factory, @Nullable String message) {
-        private static ChutePairValidation valid(PocketFactorySavedData.FactoryRecord factory) {
-            return new ChutePairValidation(true, factory, null);
+    private record ChutePairValidation(boolean valid, @Nullable BindingContext bindingContext, @Nullable String message) {
+        private static ChutePairValidation valid(BindingContext bindingContext) {
+            return new ChutePairValidation(true, bindingContext, null);
         }
 
         private static ChutePairValidation invalid(String message) {
@@ -1130,9 +1135,9 @@ public final class PocketFactoryCoreItem extends Item {
         }
     }
 
-    private record PumpPairValidation(boolean valid, @Nullable PocketFactorySavedData.FactoryRecord factory, @Nullable String message) {
-        private static PumpPairValidation valid(PocketFactorySavedData.FactoryRecord factory) {
-            return new PumpPairValidation(true, factory, null);
+    private record PumpPairValidation(boolean valid, @Nullable BindingContext bindingContext, @Nullable String message) {
+        private static PumpPairValidation valid(BindingContext bindingContext) {
+            return new PumpPairValidation(true, bindingContext, null);
         }
 
         private static PumpPairValidation invalid(String message) {
@@ -1140,9 +1145,9 @@ public final class PocketFactoryCoreItem extends Item {
         }
     }
 
-    private record ClutchPairValidation(boolean valid, @Nullable PocketFactorySavedData.FactoryRecord factory, @Nullable String message) {
-        private static ClutchPairValidation valid(PocketFactorySavedData.FactoryRecord factory) {
-            return new ClutchPairValidation(true, factory, null);
+    private record ClutchPairValidation(boolean valid, @Nullable BindingContext bindingContext, @Nullable String message) {
+        private static ClutchPairValidation valid(BindingContext bindingContext) {
+            return new ClutchPairValidation(true, bindingContext, null);
         }
 
         private static ClutchPairValidation invalid(String message) {
@@ -1157,6 +1162,16 @@ public final class PocketFactoryCoreItem extends Item {
                 throw new IllegalStateException("Pending endpoint is not a storage target: " + kind);
             }
             return storageKind;
+        }
+    }
+
+    private record BindingContext(@Nullable PocketFactorySavedData.FactoryRecord factory, int factoryId) {
+        private static BindingContext of(PocketFactorySavedData.FactoryRecord factory) {
+            return new BindingContext(factory, factory.id());
+        }
+
+        private static BindingContext unowned() {
+            return new BindingContext(null, 0);
         }
     }
 

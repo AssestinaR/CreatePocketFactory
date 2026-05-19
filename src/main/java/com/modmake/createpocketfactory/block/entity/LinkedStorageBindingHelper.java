@@ -34,7 +34,8 @@ public final class LinkedStorageBindingHelper {
         }
     }
 
-    public record BindingTarget(int bindingId, int factoryId, @Nullable PocketFactorySavedData.FactoryChunkOffset chunkOffset) {
+    public record BindingTarget(int bindingId, int factoryId, @Nullable PocketFactorySavedData.FactoryChunkOffset chunkOffset,
+                                boolean internalEndpoint) {
     }
 
     public record EndpointLocation(ResourceKey<Level> dimension, BlockPos pos) {

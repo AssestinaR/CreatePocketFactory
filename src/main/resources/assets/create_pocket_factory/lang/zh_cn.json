@@ -33,8 +33,6 @@
   "goggles.create_pocket_factory.common.more_types": "……以及另外 %s 种物品",
   "tooltip.create_pocket_factory.pocket_factory_entrance.factory_id": "已绑定工厂 ID：%s",
   "tooltip.create_pocket_factory.pocket_factory_entrance.unbound": "未绑定工厂：放置后会自动分配。",
-  "tooltip.create_pocket_factory.pocket_factory_portal.factory_id": "已绑定工厂 ID：%s",
-  "tooltip.create_pocket_factory.pocket_factory_portal.unbound": "未绑定工厂：可用核心选中后再点入口完成绑定。",
   "tooltip.create_pocket_factory.linked_chute.factory_id": "已绑定工厂 ID：%s",
   "tooltip.create_pocket_factory.linked_chute.unbound": "未绑定工厂：后续可作为关联溜槽端点使用。",
   "tooltip.create_pocket_factory.pocket_factory_eye.menu": "手持右键打开便携式口袋工厂面板。",

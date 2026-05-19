@@ -32,10 +32,6 @@ public final class ModItems {
             "pocket_factory_entrance",
             () -> new PocketFactoryEntranceBlockItem(ModBlocks.POCKET_FACTORY_ENTRANCE.get(), new Item.Properties())
         );
-        public static final DeferredItem<PocketFactoryPortalBlockItem> POCKET_FACTORY_PORTAL = ITEMS.register(
-            "pocket_factory_portal",
-            () -> new PocketFactoryPortalBlockItem(ModBlocks.POCKET_FACTORY_PORTAL.get(), new Item.Properties())
-        );
         public static final DeferredItem<LinkedChuteBlockItem> LINKED_CHUTE = ITEMS.register(
             "linked_chute",
             () -> new LinkedChuteBlockItem(ModBlocks.LINKED_CHUTE.get(), linkedProperties())
@@ -72,7 +68,6 @@ public final class ModItems {
 
         if (event.getTabKey() == CreativeModeTabs.BUILDING_BLOCKS) {
             event.accept(ModBlocks.POCKET_FACTORY_ENTRANCE.get());
-            event.accept(ModBlocks.POCKET_FACTORY_PORTAL.get());
             event.accept(ModBlocks.POCKET_FACTORY_BLOCK_A.get());
             event.accept(ModBlocks.POCKET_FACTORY_BLOCK_B.get());
         }
