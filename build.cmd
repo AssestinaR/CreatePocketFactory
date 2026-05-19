@@ -1,0 +1,1 @@
+./gradle-8.10.2\gradle-8.10.2\bin\gradle.bat jar 

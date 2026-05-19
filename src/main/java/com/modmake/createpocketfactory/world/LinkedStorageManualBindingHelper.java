@@ -68,7 +68,7 @@ public final class LinkedStorageManualBindingHelper {
         }
 
         PocketFactorySavedData savedData = PocketFactorySavedData.get(level.getServer());
-        boolean internalEndpoint = bindingTarget.chunkOffset() != null;
+        boolean internalEndpoint = bindingTarget.internalEndpoint();
 
         BlockPos capabilityPos = resolveCapabilityPos(level, origin, kind);
         if (capabilityPos == null || !isStructureEmpty(level, capabilityPos, kind)) {
@@ -103,7 +103,12 @@ public final class LinkedStorageManualBindingHelper {
                     convertCluster(level, connected, kind, false);
                     return false;
                 }
-                controller.applyExistingBinding(new LinkedStorageBindingHelper.BindingTarget(bindingId, bindingTarget.factoryId(), bindingTarget.chunkOffset()));
+                controller.applyExistingBinding(new LinkedStorageBindingHelper.BindingTarget(
+                    bindingId,
+                    bindingTarget.factoryId(),
+                    bindingTarget.chunkOffset(),
+                    bindingTarget.internalEndpoint()
+                ));
             }
             case FLUID_TANK -> {
                 LinkedFluidTankBlockEntity controller = resolveFluidController(level, connected);
@@ -124,7 +129,12 @@ public final class LinkedStorageManualBindingHelper {
                     return false;
                 }
                 controller.applyExistingBinding(
-                    new LinkedStorageBindingHelper.BindingTarget(bindingId, bindingTarget.factoryId(), bindingTarget.chunkOffset()),
+                        new LinkedStorageBindingHelper.BindingTarget(
+                            bindingId,
+                            bindingTarget.factoryId(),
+                            bindingTarget.chunkOffset(),
+                            bindingTarget.internalEndpoint()
+                        ),
                     savedData.getFluidSnapshot(bindingId)
                 );
             }

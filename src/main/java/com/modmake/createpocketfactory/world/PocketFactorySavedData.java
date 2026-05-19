@@ -98,6 +98,15 @@ public final class PocketFactorySavedData extends SavedData {
             }
         }
 
+        ListTag pumpChannelsTag = tag.getList("PumpChannels", Tag.TAG_COMPOUND);
+        for (Tag entry : pumpChannelsTag) {
+            CompoundTag channelTag = (CompoundTag) entry;
+            int bindingId = channelTag.getInt("BindingId");
+            if (bindingId > 0) {
+                data.pumpChannels.put(bindingId, PumpBridgeState.load(channelTag, registries));
+            }
+        }
+
         data.bootstrapLegacyBindings();
     data.rebuildEndpointIndex();
 
@@ -150,6 +159,12 @@ public final class PocketFactorySavedData extends SavedData {
             chuteChannelsTag.add(entry.getValue().save(entry.getKey(), registries));
         }
         tag.put("ChuteChannels", chuteChannelsTag);
+
+        ListTag pumpChannelsTag = new ListTag();
+        for (Map.Entry<Integer, PumpBridgeState> entry : pumpChannels.entrySet()) {
+            pumpChannelsTag.add(entry.getValue().save(entry.getKey(), registries));
+        }
+        tag.put("PumpChannels", pumpChannelsTag);
 
         return tag;
     }
@@ -515,48 +530,41 @@ public final class PocketFactorySavedData extends SavedData {
         return polled;
     }
 
-    public FluidStack peekPumpBridgeFluid(int bindingId) {
+    public FluidStack peekPumpBridgeFluid(int bindingId, @Nullable String requesterEndpointKey) {
         PumpBridgeState state = pumpChannels.get(bindingId);
-        return state == null ? FluidStack.EMPTY : state.fluid.copy();
+        return state == null ? FluidStack.EMPTY : state.peekForRequester(requesterEndpointKey);
     }
 
-    public @Nullable String getPumpBridgeSourceEndpointKey(int bindingId) {
-        PumpBridgeState state = pumpChannels.get(bindingId);
-        return state == null ? null : state.sourceEndpointKey;
-    }
-
-    public int getPumpBridgeRemainingCapacity(int bindingId, int capacityMb) {
-        PumpBridgeState state = pumpChannels.computeIfAbsent(bindingId, id -> new PumpBridgeState());
-        return Math.max(0, capacityMb - state.fluid.getAmount());
-    }
-
-    public int getPumpBridgeAcceptedAmount(int bindingId, FluidStack stack, int capacityMb) {
-        if (stack.isEmpty()) {
+    public int getPumpBridgeRemainingCapacity(int bindingId, @Nullable String sourceEndpointKey, int capacityMb) {
+        if (sourceEndpointKey == null || sourceEndpointKey.isEmpty()) {
             return 0;
         }
         PumpBridgeState state = pumpChannels.computeIfAbsent(bindingId, id -> new PumpBridgeState());
-        if (!state.fluid.isEmpty() && !FluidStack.isSameFluidSameComponents(state.fluid, stack)) {
+        return Math.max(0, capacityMb - state.getAmountForSource(sourceEndpointKey));
+    }
+
+    public int getPumpBridgeAcceptedAmount(int bindingId, @Nullable String sourceEndpointKey, FluidStack stack, int capacityMb) {
+        if (sourceEndpointKey == null || sourceEndpointKey.isEmpty() || stack.isEmpty()) {
             return 0;
         }
-        return Math.min(stack.getAmount(), Math.max(0, capacityMb - state.fluid.getAmount()));
+        PumpBridgeState state = pumpChannels.computeIfAbsent(bindingId, id -> new PumpBridgeState());
+        FluidStack stored = state.peekForSource(sourceEndpointKey);
+        if (!stored.isEmpty() && !FluidStack.isSameFluidSameComponents(stored, stack)) {
+            return 0;
+        }
+        return Math.min(stack.getAmount(), Math.max(0, capacityMb - stored.getAmount()));
     }
 
     public int fillPumpBridge(int bindingId, @Nullable String sourceEndpointKey, FluidStack stack, int capacityMb) {
-        if (stack.isEmpty()) {
+        if (sourceEndpointKey == null || sourceEndpointKey.isEmpty() || stack.isEmpty()) {
             return 0;
         }
         PumpBridgeState state = pumpChannels.computeIfAbsent(bindingId, id -> new PumpBridgeState());
-        int accepted = getPumpBridgeAcceptedAmount(bindingId, stack, capacityMb);
+        int accepted = getPumpBridgeAcceptedAmount(bindingId, sourceEndpointKey, stack, capacityMb);
         if (accepted <= 0) {
             return 0;
         }
-        if (state.fluid.isEmpty()) {
-            state.fluid = stack.copy();
-            state.fluid.setAmount(accepted);
-        } else {
-            state.fluid.grow(accepted);
-        }
-        state.sourceEndpointKey = sourceEndpointKey;
+        state.fillFromSource(sourceEndpointKey, stack, accepted);
         state.version++;
         setDirty();
         return accepted;
@@ -564,18 +572,12 @@ public final class PocketFactorySavedData extends SavedData {
 
     public FluidStack drainPumpBridgeFluid(int bindingId, @Nullable String requesterEndpointKey, int amount) {
         PumpBridgeState state = pumpChannels.get(bindingId);
-        if (state == null || state.fluid.isEmpty() || amount <= 0) {
+        if (state == null || amount <= 0) {
             return FluidStack.EMPTY;
         }
-        if (requesterEndpointKey != null && requesterEndpointKey.equals(state.sourceEndpointKey)) {
+        FluidStack drained = state.drainForRequester(requesterEndpointKey, amount);
+        if (drained.isEmpty()) {
             return FluidStack.EMPTY;
-        }
-        FluidStack drained = state.fluid.copy();
-        drained.setAmount(Math.min(amount, state.fluid.getAmount()));
-        state.fluid.shrink(drained.getAmount());
-        if (state.fluid.isEmpty()) {
-            state.fluid = FluidStack.EMPTY;
-            state.sourceEndpointKey = null;
         }
         state.version++;
         setDirty();
@@ -1404,14 +1406,34 @@ public final class PocketFactorySavedData extends SavedData {
     }
 
     private static final class PumpBridgeState {
-        private FluidStack fluid = FluidStack.EMPTY;
-        private @Nullable String sourceEndpointKey;
+        private final Map<String, FluidStack> channels = new LinkedHashMap<>();
         private int version;
 
         private static PumpBridgeState load(CompoundTag tag, HolderLookup.Provider registries) {
             PumpBridgeState state = new PumpBridgeState();
-            state.fluid = FluidStack.parseOptional(registries, tag.getCompound("Fluid"));
-            state.sourceEndpointKey = tag.contains("SourceEndpointKey", Tag.TAG_STRING) ? tag.getString("SourceEndpointKey") : null;
+            ListTag channelEntries = tag.getList("Channels", Tag.TAG_COMPOUND);
+            for (Tag entry : channelEntries) {
+                CompoundTag channelTag = (CompoundTag) entry;
+                if (!channelTag.contains("SourceEndpointKey", Tag.TAG_STRING)) {
+                    continue;
+                }
+                String sourceEndpointKey = channelTag.getString("SourceEndpointKey");
+                if (sourceEndpointKey.isEmpty()) {
+                    continue;
+                }
+                FluidStack fluid = FluidStack.parseOptional(registries, channelTag.getCompound("Fluid"));
+                if (!fluid.isEmpty()) {
+                    state.channels.put(sourceEndpointKey, fluid);
+                }
+            }
+
+            if (state.channels.isEmpty()) {
+                FluidStack legacyFluid = FluidStack.parseOptional(registries, tag.getCompound("Fluid"));
+                String legacySourceEndpointKey = tag.contains("SourceEndpointKey", Tag.TAG_STRING) ? tag.getString("SourceEndpointKey") : "";
+                if (!legacyFluid.isEmpty() && !legacySourceEndpointKey.isEmpty()) {
+                    state.channels.put(legacySourceEndpointKey, legacyFluid);
+                }
+            }
             state.version = tag.getInt("Version");
             return state;
         }
@@ -1419,12 +1441,73 @@ public final class PocketFactorySavedData extends SavedData {
         private CompoundTag save(int bindingId, HolderLookup.Provider registries) {
             CompoundTag tag = new CompoundTag();
             tag.putInt("BindingId", bindingId);
-            tag.put("Fluid", fluid.saveOptional(registries));
-            if (sourceEndpointKey != null && !sourceEndpointKey.isEmpty()) {
-                tag.putString("SourceEndpointKey", sourceEndpointKey);
+            ListTag channelsTag = new ListTag();
+            for (Map.Entry<String, FluidStack> entry : channels.entrySet()) {
+                if (entry.getValue().isEmpty()) {
+                    continue;
+                }
+                CompoundTag channelTag = new CompoundTag();
+                channelTag.putString("SourceEndpointKey", entry.getKey());
+                channelTag.put("Fluid", entry.getValue().saveOptional(registries));
+                channelsTag.add(channelTag);
             }
+            tag.put("Channels", channelsTag);
             tag.putInt("Version", version);
             return tag;
+        }
+
+        private FluidStack peekForRequester(@Nullable String requesterEndpointKey) {
+            if (requesterEndpointKey == null || requesterEndpointKey.isEmpty()) {
+                return FluidStack.EMPTY;
+            }
+            for (Map.Entry<String, FluidStack> entry : channels.entrySet()) {
+                if (!entry.getKey().equals(requesterEndpointKey) && !entry.getValue().isEmpty()) {
+                    return entry.getValue().copy();
+                }
+            }
+            return FluidStack.EMPTY;
+        }
+
+        private FluidStack peekForSource(String sourceEndpointKey) {
+            FluidStack fluid = channels.get(sourceEndpointKey);
+            return fluid == null ? FluidStack.EMPTY : fluid.copy();
+        }
+
+        private int getAmountForSource(String sourceEndpointKey) {
+            FluidStack fluid = channels.get(sourceEndpointKey);
+            return fluid == null ? 0 : fluid.getAmount();
+        }
+
+        private void fillFromSource(String sourceEndpointKey, FluidStack stack, int accepted) {
+            FluidStack existing = channels.get(sourceEndpointKey);
+            if (existing == null || existing.isEmpty()) {
+                FluidStack stored = stack.copy();
+                stored.setAmount(accepted);
+                channels.put(sourceEndpointKey, stored);
+                return;
+            }
+            existing.grow(accepted);
+        }
+
+        private FluidStack drainForRequester(@Nullable String requesterEndpointKey, int amount) {
+            if (requesterEndpointKey == null || requesterEndpointKey.isEmpty()) {
+                return FluidStack.EMPTY;
+            }
+            java.util.Iterator<Map.Entry<String, FluidStack>> iterator = channels.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<String, FluidStack> entry = iterator.next();
+                if (entry.getKey().equals(requesterEndpointKey) || entry.getValue().isEmpty()) {
+                    continue;
+                }
+                FluidStack drained = entry.getValue().copy();
+                drained.setAmount(Math.min(amount, entry.getValue().getAmount()));
+                entry.getValue().shrink(drained.getAmount());
+                if (entry.getValue().isEmpty()) {
+                    iterator.remove();
+                }
+                return drained;
+            }
+            return FluidStack.EMPTY;
         }
     }
 
