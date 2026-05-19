@@ -1,6 +1,6 @@
-package com.modmake.createpocketfactory.item;
+package com.assestinar.createpocketfactory.item;
 
-import com.modmake.createpocketfactory.debug.PocketFactoryDebugMenu;
+import com.assestinar.createpocketfactory.debug.PocketFactoryDebugMenu;
 import java.util.List;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;

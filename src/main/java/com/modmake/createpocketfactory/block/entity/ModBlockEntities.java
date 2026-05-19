@@ -1,7 +1,7 @@
-package com.modmake.createpocketfactory.block.entity;
+package com.assestinar.createpocketfactory.block.entity;
 
-import com.modmake.createpocketfactory.CreatePocketFactory;
-import com.modmake.createpocketfactory.block.ModBlocks;
+import com.assestinar.createpocketfactory.CreatePocketFactory;
+import com.assestinar.createpocketfactory.block.ModBlocks;
 import com.simibubi.create.content.logistics.chute.ChuteBlockEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.entity.BlockEntityType;

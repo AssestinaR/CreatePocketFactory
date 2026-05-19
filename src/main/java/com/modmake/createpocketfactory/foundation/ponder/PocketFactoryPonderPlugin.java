@@ -1,6 +1,6 @@
-package com.modmake.createpocketfactory.foundation.ponder;
+package com.assestinar.createpocketfactory.foundation.ponder;
 
-import com.modmake.createpocketfactory.CreatePocketFactory;
+import com.assestinar.createpocketfactory.CreatePocketFactory;
 import net.createmod.ponder.api.registration.PonderPlugin;
 import net.createmod.ponder.api.registration.PonderSceneRegistrationHelper;
 import net.createmod.ponder.api.registration.PonderTagRegistrationHelper;

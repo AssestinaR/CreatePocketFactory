@@ -1,4 +1,4 @@
-package com.modmake.createpocketfactory.item;
+package com.assestinar.createpocketfactory.item;
 
 import java.util.OptionalInt;
 import net.minecraft.core.component.DataComponents;

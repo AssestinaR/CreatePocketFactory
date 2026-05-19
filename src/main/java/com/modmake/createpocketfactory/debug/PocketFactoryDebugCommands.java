@@ -1,10 +1,10 @@
-package com.modmake.createpocketfactory.debug;
+package com.assestinar.createpocketfactory.debug;
 
-import com.modmake.createpocketfactory.block.ModBlocks;
-import com.modmake.createpocketfactory.debug.PocketFactoryDebugMenu;
-import com.modmake.createpocketfactory.item.PocketFactoryEntranceBlockItem;
-import com.modmake.createpocketfactory.world.PocketFactoryTeleporter;
-import com.modmake.createpocketfactory.world.PocketFactorySavedData;
+import com.assestinar.createpocketfactory.block.ModBlocks;
+import com.assestinar.createpocketfactory.debug.PocketFactoryDebugMenu;
+import com.assestinar.createpocketfactory.item.PocketFactoryEntranceBlockItem;
+import com.assestinar.createpocketfactory.world.PocketFactoryTeleporter;
+import com.assestinar.createpocketfactory.world.PocketFactorySavedData;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;

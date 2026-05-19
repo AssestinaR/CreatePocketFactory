@@ -1,6 +1,6 @@
-package com.modmake.createpocketfactory.world;
+package com.assestinar.createpocketfactory.world;
 
-import com.modmake.createpocketfactory.CreatePocketFactory;
+import com.assestinar.createpocketfactory.CreatePocketFactory;
 import java.util.Collections;
 import java.util.Collection;
 import java.util.EnumMap;

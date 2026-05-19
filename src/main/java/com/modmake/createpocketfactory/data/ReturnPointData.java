@@ -1,4 +1,4 @@
-package com.modmake.createpocketfactory.data;
+package com.assestinar.createpocketfactory.data;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;

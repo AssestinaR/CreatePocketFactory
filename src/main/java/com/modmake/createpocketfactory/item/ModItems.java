@@ -1,7 +1,7 @@
-package com.modmake.createpocketfactory.item;
+package com.assestinar.createpocketfactory.item;
 
-import com.modmake.createpocketfactory.block.ModBlocks;
-import com.modmake.createpocketfactory.CreatePocketFactory;
+import com.assestinar.createpocketfactory.block.ModBlocks;
+import com.assestinar.createpocketfactory.CreatePocketFactory;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Rarity;

@@ -1,6 +1,6 @@
-package com.modmake.createpocketfactory.block.entity;
+package com.assestinar.createpocketfactory.block.entity;
 
-import com.modmake.createpocketfactory.block.LinkedItemVaultBlock;
+import com.assestinar.createpocketfactory.block.LinkedItemVaultBlock;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.simibubi.create.api.connectivity.ConnectivityHandler;
 import com.simibubi.create.api.packager.InventoryIdentifier;
@@ -28,8 +28,8 @@ import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 import net.neoforged.neoforge.items.ItemStackHandler;
 
-import com.modmake.createpocketfactory.world.PocketFactorySavedData;
-import com.modmake.createpocketfactory.world.LinkedStorageManualBindingHelper;
+import com.assestinar.createpocketfactory.world.PocketFactorySavedData;
+import com.assestinar.createpocketfactory.world.LinkedStorageManualBindingHelper;
 
 import java.util.ArrayList;
 import java.util.List;

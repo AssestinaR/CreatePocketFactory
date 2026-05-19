@@ -1,6 +1,6 @@
-package com.modmake.createpocketfactory.data;
+package com.assestinar.createpocketfactory.data;
 
-import com.modmake.createpocketfactory.CreatePocketFactory;
+import com.assestinar.createpocketfactory.CreatePocketFactory;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;

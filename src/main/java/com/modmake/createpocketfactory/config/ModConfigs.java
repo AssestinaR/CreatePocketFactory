@@ -1,4 +1,4 @@
-package com.modmake.createpocketfactory.config;
+package com.assestinar.createpocketfactory.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 

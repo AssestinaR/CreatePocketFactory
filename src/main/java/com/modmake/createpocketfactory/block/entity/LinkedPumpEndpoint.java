@@ -1,4 +1,4 @@
-package com.modmake.createpocketfactory.block.entity;
+package com.assestinar.createpocketfactory.block.entity;
 
 public interface LinkedPumpEndpoint {
     int getBindingId();

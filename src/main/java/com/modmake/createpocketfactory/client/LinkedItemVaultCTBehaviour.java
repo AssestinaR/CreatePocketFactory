@@ -1,6 +1,6 @@
-package com.modmake.createpocketfactory.client;
+package com.assestinar.createpocketfactory.client;
 
-import com.modmake.createpocketfactory.block.LinkedItemVaultBlock;
+import com.assestinar.createpocketfactory.block.LinkedItemVaultBlock;
 import com.simibubi.create.AllSpriteShifts;
 import com.simibubi.create.api.connectivity.ConnectivityHandler;
 import com.simibubi.create.foundation.block.connected.CTSpriteShiftEntry;

@@ -1,6 +1,6 @@
-package com.modmake.createpocketfactory.block;
+package com.assestinar.createpocketfactory.block;
 
-import com.modmake.createpocketfactory.CreatePocketFactory;
+import com.assestinar.createpocketfactory.CreatePocketFactory;
 import com.simibubi.create.api.stress.BlockStressValues;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BaseEntityBlock;

@@ -1,6 +1,6 @@
-package com.modmake.createpocketfactory.block.entity;
+package com.assestinar.createpocketfactory.block.entity;
 
-import com.modmake.createpocketfactory.world.PocketFactorySavedData;
+import com.assestinar.createpocketfactory.world.PocketFactorySavedData;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;

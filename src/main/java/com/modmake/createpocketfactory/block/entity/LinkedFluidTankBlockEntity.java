@@ -1,4 +1,4 @@
-package com.modmake.createpocketfactory.block.entity;
+package com.assestinar.createpocketfactory.block.entity;
 import net.createmod.catnip.animation.LerpedFloat;
 import net.createmod.catnip.animation.LerpedFloat.Chaser;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
@@ -15,8 +15,8 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.fluids.FluidStack;
 
-import com.modmake.createpocketfactory.world.PocketFactorySavedData;
-import com.modmake.createpocketfactory.world.LinkedStorageManualBindingHelper;
+import com.assestinar.createpocketfactory.world.PocketFactorySavedData;
+import com.assestinar.createpocketfactory.world.LinkedStorageManualBindingHelper;
 
 import java.util.List;
 

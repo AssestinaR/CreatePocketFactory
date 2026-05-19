@@ -1,7 +1,7 @@
-package com.modmake.createpocketfactory.network;
+package com.assestinar.createpocketfactory.network;
 
-import com.modmake.createpocketfactory.CreatePocketFactory;
-import com.modmake.createpocketfactory.block.entity.PocketFactoryEntranceBlockEntity;
+import com.assestinar.createpocketfactory.CreatePocketFactory;
+import com.assestinar.createpocketfactory.block.entity.PocketFactoryEntranceBlockEntity;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.StreamCodec;

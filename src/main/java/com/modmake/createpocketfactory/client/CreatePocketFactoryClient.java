@@ -1,7 +1,7 @@
-package com.modmake.createpocketfactory.client;
+package com.assestinar.createpocketfactory.client;
 
-import com.modmake.createpocketfactory.CreatePocketFactory;
-import com.modmake.createpocketfactory.config.ModConfigs;
+import com.assestinar.createpocketfactory.CreatePocketFactory;
+import com.assestinar.createpocketfactory.config.ModConfigs;
 import net.createmod.catnip.config.ui.BaseConfigScreen;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;

@@ -1,6 +1,6 @@
-package com.modmake.createpocketfactory.network;
+package com.assestinar.createpocketfactory.network;
 
-import com.modmake.createpocketfactory.CreatePocketFactory;
+import com.assestinar.createpocketfactory.CreatePocketFactory;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 

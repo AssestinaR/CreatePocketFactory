@@ -1,8 +1,8 @@
-package com.modmake.createpocketfactory.block.entity;
+package com.assestinar.createpocketfactory.block.entity;
 
 import javax.annotation.Nullable;
 
-import com.modmake.createpocketfactory.world.PocketFactorySavedData;
+import com.assestinar.createpocketfactory.world.PocketFactorySavedData;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;

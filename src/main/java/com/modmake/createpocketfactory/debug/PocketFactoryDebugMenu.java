@@ -1,8 +1,8 @@
-package com.modmake.createpocketfactory.debug;
+package com.assestinar.createpocketfactory.debug;
 
-import com.modmake.createpocketfactory.item.ModItems;
-import com.modmake.createpocketfactory.world.PocketFactoryDimensions;
-import com.modmake.createpocketfactory.world.PocketFactorySavedData;
+import com.assestinar.createpocketfactory.item.ModItems;
+import com.assestinar.createpocketfactory.world.PocketFactoryDimensions;
+import com.assestinar.createpocketfactory.world.PocketFactorySavedData;
 import java.util.Comparator;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;

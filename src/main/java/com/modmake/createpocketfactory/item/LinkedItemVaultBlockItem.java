@@ -1,8 +1,8 @@
-package com.modmake.createpocketfactory.item;
+package com.assestinar.createpocketfactory.item;
 
-import com.modmake.createpocketfactory.block.LinkedItemVaultBlock;
-import com.modmake.createpocketfactory.block.entity.ModBlockEntities;
-import com.modmake.createpocketfactory.block.entity.LinkedItemVaultBlockEntity;
+import com.assestinar.createpocketfactory.block.LinkedItemVaultBlock;
+import com.assestinar.createpocketfactory.block.entity.ModBlockEntities;
+import com.assestinar.createpocketfactory.block.entity.LinkedItemVaultBlockEntity;
 import com.simibubi.create.api.connectivity.ConnectivityHandler;
 import com.simibubi.create.content.equipment.symmetryWand.SymmetryWandItem;
 import com.simibubi.create.foundation.block.IBE;

@@ -1,10 +1,10 @@
-package com.modmake.createpocketfactory.client;
+package com.assestinar.createpocketfactory.client;
 
-import com.modmake.createpocketfactory.block.entity.LinkedClutchBlockEntity;
-import com.modmake.createpocketfactory.item.PocketFactoryCoreItem;
-import com.modmake.createpocketfactory.item.PocketFactoryCoreItem.EndpointKind;
-import com.modmake.createpocketfactory.item.PocketFactoryCoreItem.HoveredEndpoint;
-import com.modmake.createpocketfactory.item.PocketFactoryCoreItem.SelectedEndpoint;
+import com.assestinar.createpocketfactory.block.entity.LinkedClutchBlockEntity;
+import com.assestinar.createpocketfactory.item.PocketFactoryCoreItem;
+import com.assestinar.createpocketfactory.item.PocketFactoryCoreItem.EndpointKind;
+import com.assestinar.createpocketfactory.item.PocketFactoryCoreItem.HoveredEndpoint;
+import com.assestinar.createpocketfactory.item.PocketFactoryCoreItem.SelectedEndpoint;
 import com.simibubi.create.content.fluids.tank.FluidTankBlockEntity;
 import com.simibubi.create.content.logistics.vault.ItemVaultBlockEntity;
 import net.createmod.catnip.outliner.Outliner;
@@ -24,7 +24,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
-@EventBusSubscriber(modid = com.modmake.createpocketfactory.CreatePocketFactory.MOD_ID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = com.assestinar.createpocketfactory.CreatePocketFactory.MOD_ID, value = Dist.CLIENT)
 public final class CoreSelectionFeedbackHandler {
     private static final String SELECTED_OUTLINE_SLOT = "create_pocket_factory_core_selection";
     private static final String HOVERED_OUTLINE_SLOT = "create_pocket_factory_core_hover";

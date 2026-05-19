@@ -1,8 +1,8 @@
-package com.modmake.createpocketfactory.block;
+package com.assestinar.createpocketfactory.block;
 
-import com.modmake.createpocketfactory.block.entity.LinkedItemVaultBlockEntity;
-import com.modmake.createpocketfactory.block.entity.ModBlockEntities;
-import com.modmake.createpocketfactory.world.LinkedStorageManualBindingHelper;
+import com.assestinar.createpocketfactory.block.entity.LinkedItemVaultBlockEntity;
+import com.assestinar.createpocketfactory.block.entity.ModBlockEntities;
+import com.assestinar.createpocketfactory.world.LinkedStorageManualBindingHelper;
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.content.logistics.vault.ItemVaultBlock;
 import com.simibubi.create.content.logistics.vault.ItemVaultBlockEntity;
@@ -142,7 +142,7 @@ public class LinkedItemVaultBlock extends ItemVaultBlock {
 
     @Override
     public ItemStack getCloneItemStack(BlockState state, HitResult target, LevelReader level, BlockPos pos, Player player) {
-        return com.modmake.createpocketfactory.item.ModEnchantments.applyLinkedEnchantment(
+        return com.assestinar.createpocketfactory.item.ModEnchantments.applyLinkedEnchantment(
                 new ItemStack(asItem()),
                 player.level().registryAccess()
         );
