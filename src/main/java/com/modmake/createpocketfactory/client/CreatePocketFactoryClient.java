@@ -12,11 +12,12 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 @Mod(value = CreatePocketFactory.MOD_ID, dist = Dist.CLIENT)
 public final class CreatePocketFactoryClient {
     public CreatePocketFactoryClient(IEventBus modBus, ModContainer modContainer) {
+        modContainer.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT, ModConfigs.CLIENT_SPEC);
         modContainer.registerExtensionPoint(IConfigScreenFactory.class,
                 (game, previousScreen) -> new BaseConfigScreen(previousScreen, CreatePocketFactory.MOD_ID));
 
         BaseConfigScreen.setDefaultActionFor(CreatePocketFactory.MOD_ID, base -> base
-                .withButtonLabels(null, null, "Gameplay Settings")
-                .withSpecs(null, null, ModConfigs.SERVER_SPEC));
+            .withButtonLabels(null, "Visual Settings", "Gameplay Settings")
+            .withSpecs(null, ModConfigs.CLIENT_SPEC, ModConfigs.SERVER_SPEC));
     }
 }
