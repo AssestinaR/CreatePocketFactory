@@ -48,14 +48,13 @@ repositories {
 
 dependencies {
     def createRuntimeDeps = files(
-            'docs/[机械动力] create-1.21.1-6.0.10.jar',
-            'docs/[机械动力] create-1.21.1-6.0.10/META-INF/jarjar/flywheel-neoforge-1.21.1-1.0.6.jar',
-            'docs/[机械动力] create-1.21.1-6.0.10/META-INF/jarjar/ponder-neoforge-1.0.82+mc1.21.1.jar',
-            'docs/[机械动力] create-1.21.1-6.0.10/META-INF/jarjar/Registrate-MC1.21-1.3.0+67.jar'
+            'libs/create-1.21.1-6.0.10.jar',
+            'libs/flywheel-neoforge-1.21.1-1.0.6.jar',
+            'libs/ponder-neoforge-1.0.82+mc1.21.1.jar',
+            'libs/Registrate-MC1.21-1.3.0+67.jar'
     )
 
-    compileOnly createRuntimeDeps
-    runtimeOnly createRuntimeDeps
+    implementation createRuntimeDeps
 }
 
 tasks.withType(ProcessResources).configureEach {
