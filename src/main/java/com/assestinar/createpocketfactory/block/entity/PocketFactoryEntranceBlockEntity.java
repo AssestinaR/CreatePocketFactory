@@ -1,39 +1,37 @@
 package com.assestinar.createpocketfactory.block.entity;
 
-import com.assestinar.createpocketfactory.block.ModBlocks;
-import com.assestinar.createpocketfactory.world.PocketFactoryDimensions;
-import com.assestinar.createpocketfactory.world.PocketFactorySavedData;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtUtils;
-import net.minecraft.nbt.Tag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.ChatFormatting;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 public final class PocketFactoryEntranceBlockEntity extends BlockEntity implements IHaveGoggleInformation {
     private static final String FACTORY_ID_TAG = "FactoryId";
-    private static final String PREVIEW_BLOCKS_TAG = "PreviewBlocks";
     private static final String PREVIEW_HASH_TAG = "PreviewHash";
-    private static final int PREVIEW_SIZE = 16;
-    private static final int PREVIEW_RADIUS = PREVIEW_SIZE / 2;
-    private static final int MAX_PREVIEW_BLOCKS = 192;
+    private static final String PROJECTION_ANCHOR_TAG = "ProjectionAnchor";
+    private static final String PROJECTION_ROTATION_TAG = "ProjectionRotation";
+    private static final String PROJECTION_FLIP_X_TAG = "ProjectionFlipX";
+    private static final String PROJECTION_FLIP_Z_TAG = "ProjectionFlipZ";
 
     private int factoryId = -1;
     private List<PreviewBlock> previewBlocks = List.of();
     private int previewHash;
     private long clientLastPreviewRequestTick = -80L;
+    @Nullable
+    private BlockPos projectionAnchor;
+    private int projectionRotationQuarterTurns;
+    private boolean projectionFlipX;
+    private boolean projectionFlipZ;
 
     public PocketFactoryEntranceBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.POCKET_FACTORY_ENTRANCE.get(), pos, blockState);
@@ -63,6 +61,71 @@ public final class PocketFactoryEntranceBlockEntity extends BlockEntity implemen
         return !previewBlocks.isEmpty();
     }
 
+    public int getPreviewHash() {
+        return previewHash;
+    }
+
+    public @Nullable BlockPos getProjectionAnchor() {
+        return projectionAnchor;
+    }
+
+    public boolean hasProjectionAnchor() {
+        return projectionAnchor != null;
+    }
+
+    public void setProjectionAnchor(@Nullable BlockPos projectionAnchor) {
+        this.projectionAnchor = projectionAnchor;
+        notifyProjectionChanged();
+    }
+
+    public int getProjectionRotationQuarterTurns() {
+        return projectionRotationQuarterTurns;
+    }
+
+    public boolean isProjectionFlipX() {
+        return projectionFlipX;
+    }
+
+    public boolean isProjectionFlipZ() {
+        return projectionFlipZ;
+    }
+
+    public void setProjectionTransform(int rotationQuarterTurns, boolean flipX, boolean flipZ) {
+        int normalizedRotation = Math.floorMod(rotationQuarterTurns, 4);
+        if (projectionRotationQuarterTurns == normalizedRotation && projectionFlipX == flipX && projectionFlipZ == flipZ) {
+            return;
+        }
+
+        projectionRotationQuarterTurns = normalizedRotation;
+        projectionFlipX = flipX;
+        projectionFlipZ = flipZ;
+        notifyProjectionChanged();
+    }
+
+    public void setProjectionState(@Nullable BlockPos projectionAnchor, int rotationQuarterTurns, boolean flipX, boolean flipZ) {
+        int normalizedRotation = Math.floorMod(rotationQuarterTurns, 4);
+        boolean changed = !java.util.Objects.equals(this.projectionAnchor, projectionAnchor)
+                || projectionRotationQuarterTurns != normalizedRotation
+                || projectionFlipX != flipX
+                || projectionFlipZ != flipZ;
+        if (!changed) {
+            return;
+        }
+
+        this.projectionAnchor = projectionAnchor;
+        projectionRotationQuarterTurns = normalizedRotation;
+        projectionFlipX = flipX;
+        projectionFlipZ = flipZ;
+        notifyProjectionChanged();
+    }
+
+    private void notifyProjectionChanged() {
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
+
     public boolean shouldRequestPreview(long gameTime) {
         return hasFactoryId() && (clientLastPreviewRequestTick < 0L || gameTime - clientLastPreviewRequestTick >= 80L);
     }
@@ -76,37 +139,7 @@ public final class PocketFactoryEntranceBlockEntity extends BlockEntity implemen
             return;
         }
 
-        PocketFactorySavedData.FactoryRecord factory = PocketFactorySavedData.get(level.getServer()).getFactory(factoryId);
-        ServerLevel factoryLevel = level.getServer().getLevel(PocketFactoryDimensions.LEVEL_KEY);
-        if (factory == null || factoryLevel == null) {
-            updatePreviewBlocks(List.of());
-            return;
-        }
-
-        ChunkPos baseChunk = PocketFactoryDimensions.getFactoryBaseChunk(factory);
-        int centerX = baseChunk.getMinBlockX() + 8;
-        int centerY = (factory.minY() + factory.maxY()) / 2;
-        int centerZ = baseChunk.getMinBlockZ() + 8;
-        BlockPos min = new BlockPos(centerX - PREVIEW_RADIUS, centerY - PREVIEW_RADIUS, centerZ - PREVIEW_RADIUS);
-
-        List<PreviewBlock> sampled = new ArrayList<>();
-        for (int y = 0; y < PREVIEW_SIZE && sampled.size() < MAX_PREVIEW_BLOCKS; y++) {
-            for (int z = 0; z < PREVIEW_SIZE && sampled.size() < MAX_PREVIEW_BLOCKS; z++) {
-                for (int x = 0; x < PREVIEW_SIZE && sampled.size() < MAX_PREVIEW_BLOCKS; x++) {
-                    BlockPos targetPos = min.offset(x, y, z);
-                    BlockState state = factoryLevel.getBlockState(targetPos);
-                    if (state.isAir()) {
-                        continue;
-                    }
-                    if (state.is(ModBlocks.POCKET_FACTORY_BLOCK_A.get()) || state.is(ModBlocks.POCKET_FACTORY_BLOCK_B.get())) {
-                        continue;
-                    }
-                    sampled.add(new PreviewBlock((byte) x, (byte) y, (byte) z, state));
-                }
-            }
-        }
-
-        updatePreviewBlocks(sampled);
+        updatePreviewBlocks(PocketFactoryPreviewHelper.sampleFactoryPreview(serverLevel, factoryId));
     }
 
     private void updatePreviewBlocks(List<PreviewBlock> updatedPreview) {
@@ -128,32 +161,26 @@ public final class PocketFactoryEntranceBlockEntity extends BlockEntity implemen
         if (factoryId > 0) {
             tag.putInt(FACTORY_ID_TAG, factoryId);
         }
-        tag.putInt(PREVIEW_HASH_TAG, previewHash);
-        ListTag previewTag = new ListTag();
-        for (PreviewBlock previewBlock : previewBlocks) {
-            CompoundTag blockTag = new CompoundTag();
-            blockTag.putByte("X", previewBlock.x());
-            blockTag.putByte("Y", previewBlock.y());
-            blockTag.putByte("Z", previewBlock.z());
-            blockTag.put("State", NbtUtils.writeBlockState(previewBlock.state()));
-            previewTag.add(blockTag);
+        if (projectionAnchor != null) {
+            tag.putLong(PROJECTION_ANCHOR_TAG, projectionAnchor.asLong());
         }
-        tag.put(PREVIEW_BLOCKS_TAG, previewTag);
+        tag.putInt(PROJECTION_ROTATION_TAG, projectionRotationQuarterTurns);
+        tag.putBoolean(PROJECTION_FLIP_X_TAG, projectionFlipX);
+        tag.putBoolean(PROJECTION_FLIP_Z_TAG, projectionFlipZ);
+        tag.putInt(PREVIEW_HASH_TAG, previewHash);
+        tag.merge(PocketFactoryPreviewHelper.writePreviewBlocks(previewBlocks));
     }
 
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         factoryId = tag.contains(FACTORY_ID_TAG) ? tag.getInt(FACTORY_ID_TAG) : -1;
+        projectionAnchor = tag.contains(PROJECTION_ANCHOR_TAG) ? BlockPos.of(tag.getLong(PROJECTION_ANCHOR_TAG)) : null;
+        projectionRotationQuarterTurns = Math.floorMod(tag.getInt(PROJECTION_ROTATION_TAG), 4);
+        projectionFlipX = tag.getBoolean(PROJECTION_FLIP_X_TAG);
+        projectionFlipZ = tag.getBoolean(PROJECTION_FLIP_Z_TAG);
         previewHash = tag.getInt(PREVIEW_HASH_TAG);
-        List<PreviewBlock> loadedPreview = new ArrayList<>();
-        ListTag previewTag = tag.getList(PREVIEW_BLOCKS_TAG, Tag.TAG_COMPOUND);
-        for (Tag entry : previewTag) {
-            CompoundTag blockTag = (CompoundTag) entry;
-            BlockState state = NbtUtils.readBlockState(registries.lookupOrThrow(Registries.BLOCK), blockTag.getCompound("State"));
-            loadedPreview.add(new PreviewBlock(blockTag.getByte("X"), blockTag.getByte("Y"), blockTag.getByte("Z"), state));
-        }
-        previewBlocks = List.copyOf(loadedPreview);
+        previewBlocks = PocketFactoryPreviewHelper.readPreviewBlocks(tag, registries);
     }
 
     @Override
@@ -199,6 +226,6 @@ public final class PocketFactoryEntranceBlockEntity extends BlockEntity implemen
                         .withStyle(bound ? ChatFormatting.GREEN : ChatFormatting.RED));
     }
 
-    public record PreviewBlock(byte x, byte y, byte z, BlockState state) {
+    public record PreviewBlock(int x, int y, int z, BlockState state, @Nullable CompoundTag blockEntityTag) {
     }
 }

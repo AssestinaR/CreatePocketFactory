@@ -1,7 +1,10 @@
 package com.assestinar.createpocketfactory.client;
 
+import com.assestinar.createpocketfactory.block.entity.PocketFactoryEntranceBlockEntity;
 import com.assestinar.createpocketfactory.block.entity.LinkedClutchBlockEntity;
+import com.assestinar.createpocketfactory.config.ModConfigs;
 import com.assestinar.createpocketfactory.item.PocketFactoryCoreItem;
+import com.assestinar.createpocketfactory.item.PocketFactoryCoreItem.BoundEntrance;
 import com.assestinar.createpocketfactory.item.PocketFactoryCoreItem.EndpointKind;
 import com.assestinar.createpocketfactory.item.PocketFactoryCoreItem.HoveredEndpoint;
 import com.assestinar.createpocketfactory.item.PocketFactoryCoreItem.SelectedEndpoint;
@@ -28,10 +31,15 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 public final class CoreSelectionFeedbackHandler {
     private static final String SELECTED_OUTLINE_SLOT = "create_pocket_factory_core_selection";
     private static final String HOVERED_OUTLINE_SLOT = "create_pocket_factory_core_hover";
+    private static final String ENTRANCE_HOVER_OUTLINE_SLOT = "create_pocket_factory_core_entrance_hover";
+    private static final String ENTRANCE_BOUND_OUTLINE_SLOT = "create_pocket_factory_core_entrance_bound";
+    private static final String PROJECTION_TARGET_OUTLINE_SLOT = "create_pocket_factory_core_projection_target";
+    private static final String PROJECTION_ANCHOR_OUTLINE_SLOT = "create_pocket_factory_core_projection_anchor";
     private static final int SELECTED_COLOR = 0xD2B46D;
     private static final int AVAILABLE_COLOR = 0x5DBB63;
     private static final int OUTPUT_COLOR = 0x4A90E2;
     private static final int BLOCKED_COLOR = 0xD95C5C;
+    private static final int TARGET_COLOR = 0x4A90E2;
     private static final double FACE_SLICE_THICKNESS = 1 / 16d;
 
     private CoreSelectionFeedbackHandler() {
@@ -52,12 +60,24 @@ public final class CoreSelectionFeedbackHandler {
         }
 
         SelectedEndpoint endpoint = PocketFactoryCoreItem.getSelectedEndpoint(heldItem);
+        BoundEntrance boundEntrance = PocketFactoryCoreItem.getBoundEntrance(heldItem);
         if (endpoint != null && level.dimension().equals(endpoint.dimension())) {
             drawSelectedFeedback(level, endpoint);
         }
 
+        if (boundEntrance != null && level.dimension().equals(boundEntrance.dimension())) {
+            drawOutline(ENTRANCE_BOUND_OUTLINE_SLOT, resolveBounds(level, boundEntrance.pos()), SELECTED_COLOR);
+            if (ModConfigs.entranceProjectionMode().showsLargeProjection()) {
+                drawProjectionTargetFeedback(minecraft, heldItem);
+            }
+        }
+
         if (!(minecraft.hitResult instanceof BlockHitResult blockHitResult) || minecraft.hitResult.getType() != HitResult.Type.BLOCK) {
             return;
+        }
+
+        if (endpoint == null && boundEntrance == null) {
+            drawEntranceHoverFeedback(level, blockHitResult.getBlockPos());
         }
 
         HoveredEndpoint hoveredEndpoint = PocketFactoryCoreItem.getHoveredEndpoint(level, blockHitResult.getBlockPos(), endpoint);
@@ -91,6 +111,26 @@ public final class CoreSelectionFeedbackHandler {
         }
 
         drawOutline(HOVERED_OUTLINE_SLOT, resolveBounds(level, hoveredEndpoint.pos()), hoveredEndpoint.isAvailable() ? AVAILABLE_COLOR : BLOCKED_COLOR);
+    }
+
+    private static void drawEntranceHoverFeedback(Level level, BlockPos pos) {
+        if (!(level.getBlockEntity(pos) instanceof PocketFactoryEntranceBlockEntity entrance) || !entrance.hasFactoryId()) {
+            return;
+        }
+
+        drawOutline(ENTRANCE_HOVER_OUTLINE_SLOT, resolveBounds(level, pos), AVAILABLE_COLOR);
+    }
+
+    private static void drawProjectionTargetFeedback(Minecraft minecraft, ItemStack heldItem) {
+        AABB projectedBounds = EntranceProjectionHandler.getCurrentProjectedBounds(minecraft, heldItem);
+        if (projectedBounds != null) {
+            drawOutline(PROJECTION_TARGET_OUTLINE_SLOT, projectedBounds, TARGET_COLOR);
+        }
+
+        BlockPos anchor = EntranceProjectionHandler.getCurrentAnchor(heldItem);
+        if (anchor != null) {
+            drawOutline(PROJECTION_ANCHOR_OUTLINE_SLOT, fullBlockBounds(anchor), TARGET_COLOR);
+        }
     }
 
     private static boolean drawClutchRoleOutlines(Level level, BlockPos pos, String slotPrefix) {

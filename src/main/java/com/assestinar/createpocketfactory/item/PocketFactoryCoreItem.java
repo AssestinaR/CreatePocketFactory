@@ -51,11 +51,13 @@ import com.simibubi.create.content.logistics.vault.ItemVaultBlockEntity;
 
 public final class PocketFactoryCoreItem extends Item {
     private static final String PENDING_ENDPOINT_TAG = "PendingEndpoint";
+    private static final String BOUND_ENTRANCE_TAG = "BoundEntrance";
     private static final String TARGET_DIMENSION_TAG = "Dimension";
     private static final String TARGET_X_TAG = "X";
     private static final String TARGET_Y_TAG = "Y";
     private static final String TARGET_Z_TAG = "Z";
     private static final String TARGET_KIND_TAG = "Kind";
+    private static final String TARGET_FACTORY_ID_TAG = "FactoryId";
     private static final Style SELECTION_TOOLTIP_STYLE = Style.EMPTY.withColor(TextColor.fromRgb(0xB7BFD0));
 
     public PocketFactoryCoreItem(Properties properties) {
@@ -68,6 +70,13 @@ public final class PocketFactoryCoreItem extends Item {
         BlockPos origin = context.getClickedPos();
         BlockState state = level.getBlockState(origin);
         ItemStack stack = context.getItemInHand();
+
+        if (hasBoundEntrance(stack)) {
+            if (level.isClientSide()) {
+                return InteractionResult.SUCCESS;
+            }
+            return handleBoundEntranceClick((ServerLevel) level, context, stack, context.getPlayer());
+        }
 
         LinkedStorageManualBindingHelper.StorageKind storageKind = LinkedStorageManualBindingHelper.getStorageKind(state);
         if (storageKind != null && LinkedStorageManualBindingHelper.isNormalStorage(state)) {
@@ -135,6 +144,53 @@ public final class PocketFactoryCoreItem extends Item {
                     SELECTION_TOOLTIP_STYLE
             );
         }
+
+        BoundEntrance boundEntrance = getBoundEntrance(stack);
+        if (boundEntrance != null) {
+            tooltipComponents.add(Component.literal("Bound entrance: " + boundEntrance.factoryId())
+                    .withStyle(SELECTION_TOOLTIP_STYLE));
+            tooltipComponents.add(Component.literal(boundEntrance.dimension().location() + " @ "
+                            + boundEntrance.pos().getX() + ", " + boundEntrance.pos().getY() + ", " + boundEntrance.pos().getZ())
+                    .withStyle(SELECTION_TOOLTIP_STYLE));
+        }
+    }
+
+    private static InteractionResult handleBoundEntranceClick(ServerLevel level, UseOnContext context, ItemStack stack,
+                                                              @Nullable Player player) {
+        BoundEntrance boundEntrance = getBoundEntrance(stack);
+        if (boundEntrance == null) {
+            return InteractionResult.PASS;
+        }
+
+        BlockPos clickedPos = context.getClickedPos();
+        BlockState clickedState = level.getBlockState(clickedPos);
+        if (clickedState.getBlock() instanceof PocketFactoryEntranceBlock) {
+            if (!boundEntrance.dimension().equals(level.dimension()) || !boundEntrance.pos().equals(clickedPos)) {
+                notifyPlayer(player, "This core is already bound to another entrance.");
+                return InteractionResult.FAIL;
+            }
+
+            clearBoundEntrance(stack);
+            notifyPlayer(player, "Entrance selection cleared.");
+            return InteractionResult.CONSUME;
+        }
+
+        if (!boundEntrance.dimension().equals(level.dimension())) {
+            notifyPlayer(player, "Projection position must be set in the same dimension as the bound entrance.");
+            return InteractionResult.FAIL;
+        }
+
+        PocketFactoryEntranceBlockEntity entrance = resolveBoundEntrance(level, stack);
+        if (entrance == null) {
+            clearBoundEntrance(stack);
+            notifyPlayer(player, "Bound entrance is no longer available.");
+            return InteractionResult.FAIL;
+        }
+
+        BlockPos anchor = resolveProjectionAnchor(level, clickedPos, context.getClickedFace());
+        entrance.setProjectionAnchor(anchor);
+        notifyPlayer(player, "Projection position updated.");
+        return InteractionResult.CONSUME;
     }
 
     private static InteractionResult handleStorageClick(ServerLevel level, BlockPos origin,
@@ -222,7 +278,15 @@ public final class PocketFactoryCoreItem extends Item {
                                                          @Nullable Player player) {
         PendingEndpoint pendingEndpoint = getPendingEndpoint(stack);
         if (pendingEndpoint == null) {
-            return InteractionResult.PASS;
+            if (!(level.getBlockEntity(entrancePos) instanceof PocketFactoryEntranceBlockEntity entrance) || !entrance.hasFactoryId()) {
+                notifyPlayer(player, "This entrance is not bound to a pocket factory.");
+                return InteractionResult.FAIL;
+            }
+
+            clearPendingEndpoint(stack);
+            setBoundEntrance(stack, level.dimension(), entrancePos, entrance.getFactoryId());
+            notifyPlayer(player, "Entrance selected. Use the core on another block to set the projection position.");
+            return InteractionResult.CONSUME;
         }
 
         return switch (pendingEndpoint.kind()) {
@@ -558,6 +622,58 @@ public final class PocketFactoryCoreItem extends Item {
         tag.putString(TARGET_KIND_TAG, kind.name());
         root.put(PENDING_ENDPOINT_TAG, tag);
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(root));
+    }
+
+    private static void setBoundEntrance(ItemStack stack, ResourceKey<Level> dimension, BlockPos pos, int factoryId) {
+        CompoundTag root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+        CompoundTag tag = new CompoundTag();
+        tag.putString(TARGET_DIMENSION_TAG, dimension.location().toString());
+        tag.putInt(TARGET_X_TAG, pos.getX());
+        tag.putInt(TARGET_Y_TAG, pos.getY());
+        tag.putInt(TARGET_Z_TAG, pos.getZ());
+        tag.putInt(TARGET_FACTORY_ID_TAG, factoryId);
+        root.put(BOUND_ENTRANCE_TAG, tag);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(root));
+    }
+
+    public static boolean hasBoundEntrance(ItemStack stack) {
+        return getBoundEntrance(stack) != null;
+    }
+
+    public static @Nullable BoundEntrance getBoundEntrance(ItemStack stack) {
+        CompoundTag root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+        if (!root.contains(BOUND_ENTRANCE_TAG)) {
+            return null;
+        }
+
+        CompoundTag tag = root.getCompound(BOUND_ENTRANCE_TAG);
+        if (!tag.contains(TARGET_DIMENSION_TAG) || !tag.contains(TARGET_FACTORY_ID_TAG)) {
+            return null;
+        }
+
+        ResourceLocation location = ResourceLocation.tryParse(tag.getString(TARGET_DIMENSION_TAG));
+        if (location == null) {
+            return null;
+        }
+
+        return new BoundEntrance(
+                ResourceKey.create(Registries.DIMENSION, location),
+                new BlockPos(tag.getInt(TARGET_X_TAG), tag.getInt(TARGET_Y_TAG), tag.getInt(TARGET_Z_TAG)),
+                tag.getInt(TARGET_FACTORY_ID_TAG)
+        );
+    }
+
+    private static void clearBoundEntrance(ItemStack stack) {
+        CompoundTag root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+        if (!root.contains(BOUND_ENTRANCE_TAG)) {
+            return;
+        }
+        root.remove(BOUND_ENTRANCE_TAG);
+        if (root.isEmpty()) {
+            stack.remove(DataComponents.CUSTOM_DATA);
+        } else {
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(root));
+        }
     }
 
     private static void clearPendingEndpoint(ItemStack stack) {
@@ -1063,6 +1179,32 @@ public final class PocketFactoryCoreItem extends Item {
         return selected == null ? null : new PendingEndpoint(selected.dimension(), selected.pos(), selected.kind());
     }
 
+    private static @Nullable PocketFactoryEntranceBlockEntity resolveBoundEntrance(ServerLevel level, ItemStack stack) {
+        BoundEntrance boundEntrance = getBoundEntrance(stack);
+        if (boundEntrance == null) {
+            return null;
+        }
+
+        ServerLevel targetLevel = level.getServer().getLevel(boundEntrance.dimension());
+        if (targetLevel == null) {
+            return null;
+        }
+
+        if (!(targetLevel.getBlockEntity(boundEntrance.pos()) instanceof PocketFactoryEntranceBlockEntity entrance)) {
+            return null;
+        }
+
+        return entrance.hasFactoryId() && entrance.getFactoryId() == boundEntrance.factoryId() ? entrance : null;
+    }
+
+    private static BlockPos resolveProjectionAnchor(Level level, BlockPos clickedPos, Direction clickedFace) {
+        boolean replaceable = level.getBlockState(clickedPos).canBeReplaced();
+        if (clickedFace.getAxis().isVertical() && !replaceable) {
+            return clickedPos.relative(clickedFace);
+        }
+        return clickedPos;
+    }
+
     private static void notifyPlayer(@Nullable Player player, String message) {
         if (player != null) {
             player.displayClientMessage(Component.literal(message), true);
@@ -1113,6 +1255,9 @@ public final class PocketFactoryCoreItem extends Item {
         public boolean isAvailable() {
             return state == HoverState.AVAILABLE;
         }
+    }
+
+    public record BoundEntrance(ResourceKey<Level> dimension, BlockPos pos, int factoryId) {
     }
 
     private record StoragePairValidation(boolean valid, @Nullable BindingContext bindingContext, @Nullable String message) {

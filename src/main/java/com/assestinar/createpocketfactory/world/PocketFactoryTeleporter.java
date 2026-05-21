@@ -1,9 +1,11 @@
 package com.assestinar.createpocketfactory.world;
 
+import com.assestinar.createpocketfactory.block.entity.PocketFactoryEntranceBlockEntity;
 import com.assestinar.createpocketfactory.data.ModAttachments;
 import com.assestinar.createpocketfactory.data.ReturnPointData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -37,6 +39,12 @@ public final class PocketFactoryTeleporter {
     }
 
     public static boolean returnFromFactory(ServerPlayer player) {
+        ResourceKey<net.minecraft.world.level.Level> currentDimension = player.serverLevel().dimension();
+        PocketFactorySavedData savedData = PocketFactorySavedData.get(player.server);
+        PocketFactorySavedData.FactoryRecord activeFactory = currentDimension == PocketFactoryDimensions.LEVEL_KEY
+            ? PocketFactoryDimensions.findFactoryAt(savedData, player.blockPosition())
+            : null;
+
         ReturnPointData returnPoint = player.getData(ModAttachments.RETURN_POINT.get());
         ServerLevel returnLevel = returnPoint.valid() ? player.server.getLevel(returnPoint.dimensionKey()) : null;
 
@@ -51,6 +59,22 @@ public final class PocketFactoryTeleporter {
         }
 
         player.setData(ModAttachments.RETURN_POINT.get(), ReturnPointData.empty());
+        refreshPlacedEntrance(activeFactory, player.server);
         return true;
+    }
+
+    private static void refreshPlacedEntrance(PocketFactorySavedData.FactoryRecord factory, net.minecraft.server.MinecraftServer server) {
+        if (factory == null || !factory.hasEntrance() || factory.entranceDimension() == null) {
+            return;
+        }
+
+        ServerLevel entranceLevel = server.getLevel(ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION, factory.entranceDimension()));
+        if (entranceLevel == null) {
+            return;
+        }
+
+        if (entranceLevel.getBlockEntity(factory.entrancePos()) instanceof PocketFactoryEntranceBlockEntity entrance) {
+            entrance.refreshPreviewSnapshot();
+        }
     }
 }

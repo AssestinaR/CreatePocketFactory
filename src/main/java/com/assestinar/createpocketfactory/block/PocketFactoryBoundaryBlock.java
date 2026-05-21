@@ -1,6 +1,7 @@
 package com.assestinar.createpocketfactory.block;
 
 import com.assestinar.createpocketfactory.item.ModItems;
+import com.assestinar.createpocketfactory.item.PocketFactoryCoreItem;
 import com.assestinar.createpocketfactory.world.PocketFactoryDimensions;
 import com.assestinar.createpocketfactory.world.PocketFactorySavedData;
 import com.mojang.serialization.MapCodec;
@@ -47,6 +48,10 @@ public class PocketFactoryBoundaryBlock extends Block {
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
         if (!stack.is(ModItems.POCKET_FACTORY_INTERNAL_EYE.get())) {
+            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        }
+
+        if (PocketFactoryCoreItem.hasBoundEntrance(stack)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
 

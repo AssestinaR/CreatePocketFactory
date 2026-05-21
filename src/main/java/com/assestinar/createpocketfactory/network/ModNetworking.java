@@ -15,5 +15,25 @@ public final class ModNetworking {
                 RequestEntrancePreviewPacket.STREAM_CODEC,
                 RequestEntrancePreviewPacket::handle
         );
+        registrar.playToServer(
+            RequestFactoryProjectionPreviewPacket.TYPE,
+            RequestFactoryProjectionPreviewPacket.STREAM_CODEC,
+            RequestFactoryProjectionPreviewPacket::handle
+        );
+        registrar.playToServer(
+            SetEntranceProjectionAnchorPacket.TYPE,
+            SetEntranceProjectionAnchorPacket.STREAM_CODEC,
+            SetEntranceProjectionAnchorPacket::handle
+        );
+        registrar.playToServer(
+            SetBoundEntranceProjectionStatePacket.TYPE,
+            SetBoundEntranceProjectionStatePacket.STREAM_CODEC,
+            SetBoundEntranceProjectionStatePacket::handle
+        );
+        registrar.playToClient(
+            SyncFactoryProjectionPreviewPacket.TYPE,
+            SyncFactoryProjectionPreviewPacket.STREAM_CODEC,
+            SyncFactoryProjectionPreviewPacket::handle
+        );
     }
 }

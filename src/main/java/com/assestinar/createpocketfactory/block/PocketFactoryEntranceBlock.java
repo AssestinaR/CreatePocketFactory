@@ -121,6 +121,13 @@ public final class PocketFactoryEntranceBlock extends BaseEntityBlock implements
         int factoryId = resolveFactoryId(savedData, stack, placer != null ? placer.getUUID() : null);
 
         blockEntity.setFactoryId(factoryId);
+        blockEntity.setProjectionAnchor(PocketFactoryEntranceBlockItem.getProjectionAnchor(stack).orElse(null));
+        blockEntity.setProjectionTransform(
+            PocketFactoryEntranceBlockItem.getProjectionRotationQuarterTurns(stack),
+            PocketFactoryEntranceBlockItem.isProjectionFlipX(stack),
+            PocketFactoryEntranceBlockItem.isProjectionFlipZ(stack)
+        );
+        blockEntity.refreshPreviewSnapshot();
         savedData.bindEntrance(factoryId, level.dimension(), pos);
     }
 
@@ -140,7 +147,14 @@ public final class PocketFactoryEntranceBlock extends BaseEntityBlock implements
     protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
         BlockEntity blockEntity = params.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
         if (blockEntity instanceof PocketFactoryEntranceBlockEntity entranceBlockEntity && entranceBlockEntity.hasFactoryId()) {
-            return List.of(PocketFactoryEntranceBlockItem.createBoundStack(this, entranceBlockEntity.getFactoryId()));
+            return List.of(PocketFactoryEntranceBlockItem.createBoundStack(
+                    this,
+                    entranceBlockEntity.getFactoryId(),
+                    entranceBlockEntity.getProjectionAnchor(),
+                    entranceBlockEntity.getProjectionRotationQuarterTurns(),
+                    entranceBlockEntity.isProjectionFlipX(),
+                    entranceBlockEntity.isProjectionFlipZ()
+            ));
         }
 
         return super.getDrops(state, params);

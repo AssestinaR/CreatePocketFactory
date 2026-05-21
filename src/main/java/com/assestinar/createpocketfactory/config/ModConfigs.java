@@ -25,16 +25,38 @@ public final class ModConfigs {
         return SERVER.requirePocketBoundaryForLinkedBindings.get();
     }
 
-    public static boolean showEntrancePreview() {
-        return CLIENT.showEntrancePreview.get();
+    public static EntranceProjectionMode entranceProjectionMode() {
+        return CLIENT.entranceProjectionMode.get();
     }
 
     public static boolean rotateEntrancePreview() {
         return CLIENT.rotateEntrancePreview.get();
     }
 
+    public static boolean renderProjectionBlockEntities() {
+        return CLIENT.renderProjectionBlockEntities.get();
+    }
+
+    public static boolean renderDynamicProjectionParts() {
+        return CLIENT.renderDynamicProjectionParts.get();
+    }
+
     public static boolean showLinkedBlockParticles() {
         return CLIENT.showLinkedBlockParticles.get();
+    }
+
+    public enum EntranceProjectionMode {
+        CORE_ONLY,
+        MINIATURE,
+        LARGE_WITH_CORE;
+
+        public boolean showsMiniaturePreview() {
+            return this == MINIATURE;
+        }
+
+        public boolean showsLargeProjection() {
+            return this == LARGE_WITH_CORE;
+        }
     }
 
     private static final class Server {
@@ -53,24 +75,40 @@ public final class ModConfigs {
     }
 
     private static final class Client {
-        private final ModConfigSpec.BooleanValue showEntrancePreview;
+        private final ModConfigSpec.EnumValue<EntranceProjectionMode> entranceProjectionMode;
         private final ModConfigSpec.BooleanValue rotateEntrancePreview;
+        private final ModConfigSpec.BooleanValue renderProjectionBlockEntities;
+        private final ModConfigSpec.BooleanValue renderDynamicProjectionParts;
         private final ModConfigSpec.BooleanValue showLinkedBlockParticles;
 
         private Client(ModConfigSpec.Builder builder) {
             builder.translation("create_pocket_factory.configuration.rendering").push("rendering");
-            showEntrancePreview = builder
-                .translation("create_pocket_factory.configuration.showEntrancePreview")
+            entranceProjectionMode = builder
+            .translation("create_pocket_factory.configuration.entranceProjectionMode")
                     .comment(
-                            "If true, the entrance renders a miniature snapshot of the pocket factory.",
-                            "If false, the entrance renders a rotating Pocket Factory Core model instead.")
-                    .define("showEntrancePreview", true);
+                    "Controls how the entrance and held bound entrance render the pocket factory preview.",
+                    "CORE_ONLY renders only the rotating core.",
+                    "MINIATURE renders the miniature preview on the entrance.",
+                    "LARGE_WITH_CORE keeps the entrance on the core and enables the held large projection.")
+                .defineEnum("entranceProjectionMode", EntranceProjectionMode.MINIATURE);
             rotateEntrancePreview = builder
                 .translation("create_pocket_factory.configuration.rotateEntrancePreview")
                     .comment(
                             "If true, the entrance display rotates.",
-                            "If false, both the miniature preview and the core fallback stay still.")
+                    "If false, both the miniature preview and the core fallback stay still.")
                     .define("rotateEntrancePreview", false);
+            renderProjectionBlockEntities = builder
+                .translation("create_pocket_factory.configuration.renderProjectionBlockEntities")
+                    .comment(
+                        "If true, both the miniature and the large projection render Create block entity overlay parts.",
+                        "If false, both projection sizes skip the BER path entirely and only keep cached static block models.")
+                    .define("renderProjectionBlockEntities", true);
+            renderDynamicProjectionParts = builder
+                .translation("create_pocket_factory.configuration.renderDynamicProjectionParts")
+                    .comment(
+                        "If true, the large projection also renders Create block entity animation parts such as shafts, chain wheels, or steam engine linkages.",
+                        "If false, only the static block model is rendered for the projection.")
+                    .define("renderDynamicProjectionParts", true);
             builder.pop();
 
             builder.translation("create_pocket_factory.configuration.linkedBlockEffects").push("linkedBlockEffects");
